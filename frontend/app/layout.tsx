@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
-import Header from "@/components/layout/Header";
+import LayoutShell from "@/components/layout/LayoutShell";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,25 +18,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={inter.variable}>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
           href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
       <body>
-        <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
-          <Sidebar />
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", marginLeft: "240px" }}>
-            <Header />
-            <main style={{ flex: 1, padding: "28px 32px" }}>{children}</main>
-          </div>
-        </div>
+        <LayoutShell>{children}</LayoutShell>
       </body>
     </html>
   );

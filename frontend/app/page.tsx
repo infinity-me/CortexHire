@@ -98,7 +98,8 @@ export default function DashboardPage() {
           </div>
         </div>
         <h1 style={{
-          fontSize: 42, fontWeight: 900, fontFamily: "'Space Grotesk', sans-serif",
+          fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 900,
+          fontFamily: "'Space Grotesk', sans-serif",
           lineHeight: 1.15, marginBottom: 12
         }}>
           Command Center
@@ -106,14 +107,14 @@ export default function DashboardPage() {
             AI Recruitment Intelligence
           </span>
         </h1>
-        <p style={{ fontSize: 16, color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.6 }}>
+        <p style={{ fontSize: 15, color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.6 }}>
           Stop matching keywords. Start understanding potential. CortexHire ranks candidates
           the way an elite recruiter thinks — with full context, zero bias.
         </p>
       </motion.div>
 
       {/* Stats */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 32 }}>
+      <div className="stats-row" style={{ marginBottom: 32 }}>
         <StatCard icon={Briefcase} label="Active Jobs" value={loading ? "—" : jobs.length} color="#7c3aed" delay={0.1} />
         <StatCard icon={Users} label="Candidates" value={loading ? "—" : candidateCount} color="#06b6d4" delay={0.2} />
         <StatCard icon={Brain} label="AI-Ready Jobs" value={loading ? "—" : readyJobs} color="#10b981" delay={0.3} />
@@ -121,7 +122,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
+      <div className="grid-3" style={{ marginBottom: 32 }}>
         {/* Run Ranking */}
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
@@ -298,7 +299,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ fontSize: 18, fontWeight: 700 }}>10 AI Modules Powering CortexHire</div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
           {INNOVATIONS.map((item, i) => (
             <Link key={i} href={item.href} style={{ textDecoration: "none" }}>
               <motion.div

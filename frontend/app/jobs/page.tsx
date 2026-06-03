@@ -51,9 +51,9 @@ export default function JobsPage() {
     <div style={{ maxWidth: 1100 }}>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 32 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: 30, fontWeight: 800, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 6 }}>
+            <h1 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 6 }}>
               Jobs
             </h1>
             <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>
@@ -69,6 +69,7 @@ export default function JobsPage() {
               background: "linear-gradient(135deg, #7c3aed, #4338ca)",
               border: "none", color: "white", fontSize: 13, fontWeight: 600,
               cursor: "pointer", boxShadow: "0 0 20px rgba(124,58,237,0.35)",
+              flexShrink: 0,
             }}
           >
             <Plus size={15} /> New Job
@@ -77,13 +78,13 @@ export default function JobsPage() {
       </motion.div>
 
       {loading ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div className="grid-2">
           {[1,2,3,4].map(i => (
             <div key={i} className="skeleton" style={{ height: 160, borderRadius: 16 }} />
           ))}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div className="grid-2">
           {jobs.map((job, i) => {
             const sc = statusColor(job.status);
             return (

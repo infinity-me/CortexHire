@@ -74,7 +74,7 @@ export default function RankingResultsPage() {
         </div>
       </motion.div>
 
-      <div style={{ display: "grid", gridTemplateColumns: selected ? "400px 1fr" : "1fr", gap: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(300px, 400px) 1fr" : "1fr", gap: 24 }}>
         {/* Ranking list */}
         <div>
           {/* Summary stats */}
@@ -149,7 +149,7 @@ export default function RankingResultsPage() {
                   <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 20 }}>{selected.candidate.headline}</div>
 
                   {/* Score grid */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
                     {[
                       { label: "Fit Score", val: selected.fit_score, color: "#10b981" },
                       { label: "Risk Score", val: selected.risk_score, color: "#f43f5e", lower: true },

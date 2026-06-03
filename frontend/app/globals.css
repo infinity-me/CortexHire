@@ -31,6 +31,10 @@
   --glow-purple: 0 0 40px rgba(124, 58, 237, 0.25);
   --glow-cyan: 0 0 40px rgba(6, 182, 212, 0.20);
   --glow-emerald: 0 0 40px rgba(16, 185, 129, 0.20);
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --header-height: 64px;
 }
 
 * {
@@ -122,6 +126,10 @@ html, body {
   100% { background-position: 200% 0; }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .shimmer {
   background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
   background-size: 200% 100%;
@@ -155,7 +163,7 @@ html, body {
 .trajectory-plateauing { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
 .trajectory-declining { background: rgba(244,63,94,0.15); color: #f43f5e; border: 1px solid rgba(244,63,94,0.3); }
 
-/* Sidebar */
+/* ── Sidebar ─────────────────────────────────────────────── */
 .sidebar-link {
   display: flex;
   align-items: center;
@@ -197,4 +205,194 @@ html, body {
   height: 100%;
   border-radius: 3px;
   transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Layout shell ────────────────────────────────────────── */
+.layout-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+.layout-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 50;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.layout-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-left: var(--sidebar-width);
+  min-width: 0;
+}
+
+.layout-main {
+  flex: 1;
+  padding: 28px 32px;
+  min-width: 0;
+}
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 49;
+  backdrop-filter: blur(2px);
+}
+
+/* Hamburger button */
+.hamburger-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(124,58,237,0.12);
+  border: 1px solid rgba(124,58,237,0.25);
+  color: #a78bfa;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── Responsive utility classes ──────────────────────────── */
+
+/* Responsive grids */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+/* Stat row */
+.stats-row {
+  display: flex;
+  gap: 16px;
+}
+
+/* ── Tablet (≤1024px) ────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .layout-sidebar {
+    transform: translateX(-100%);
+  }
+  .layout-sidebar.open {
+    transform: translateX(0);
+  }
+  .layout-body {
+    margin-left: 0;
+  }
+  .sidebar-overlay.open {
+    display: block;
+  }
+  .hamburger-btn {
+    display: flex;
+  }
+  .layout-main {
+    padding: 20px 20px;
+  }
+  .grid-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .grid-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ── Mobile (≤768px) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .layout-main {
+    padding: 16px;
+  }
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .grid-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
+  .stack-mobile {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .full-mobile {
+    width: 100% !important;
+  }
+}
+
+/* ── Small mobile (≤480px) ───────────────────────────────── */
+@media (max-width: 480px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+  .layout-main {
+    padding: 12px;
+  }
+}
+
+/* ── Two-column split layouts (interview, session, etc.) ────── */
+.interview-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+}
+
+@media (max-width: 900px) {
+  .interview-layout {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Live session layout ────────────────────────────────────── */
+@media (max-width: 900px) {
+  .session-layout {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Ranking split panel ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ranking-split {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Job detail genome sidebar ───────────────────────────────── */
+@media (max-width: 900px) {
+  .job-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Global input/select focus ring ─────────────────────────── */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: rgba(124,58,237,0.5) !important;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.08);
+}
+
+/* ── Prevent content overflow on all screens ─────────────────── */
+img, video, iframe {
+  max-width: 100%;
+}
+
+* {
+  min-width: 0;
 }

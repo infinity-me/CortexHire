@@ -162,7 +162,7 @@ export default function InterviewSetupPage() {
         </div>
       </motion.div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 360px)", gap: 24, flexWrap: "wrap" }} className="interview-layout">
         {/* Setup Form */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}

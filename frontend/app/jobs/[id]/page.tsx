@@ -227,7 +227,7 @@ export default function JobDetailPage() {
         </motion.div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: genome ? "1fr 380px" : "1fr", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: genome ? "minmax(0, 1fr) 380px" : "1fr", gap: 20 }}>
         {/* Left: JD + genome details */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Role summary */}
@@ -248,7 +248,7 @@ export default function JobDetailPage() {
 
           {/* Functional + hidden needs */}
           {genome && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
                 className="glass-card" style={{ padding: 18 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#06b6d4", marginBottom: 10 }}>FUNCTIONAL NEEDS</div>
@@ -274,7 +274,7 @@ export default function JobDetailPage() {
 
           {/* Context cards */}
           {genome && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
               {[
                 { icon: Target, label: "Cognitive Style", value: genome.cognitive_style, color: "#a78bfa" },
                 { icon: Shield, label: "Risk Profile", value: genome.risk_profile, color: "#06b6d4" },

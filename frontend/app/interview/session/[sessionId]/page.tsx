@@ -403,7 +403,7 @@ export default function InterviewSessionPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
+      <div className="session-layout" style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
         {/* Left: Video + Question */}
         <div>
           {/* Video Feed */}

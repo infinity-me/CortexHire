@@ -298,7 +298,7 @@ export default function InterviewReportPage() {
         </div>
       </motion.div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 20, marginBottom: 20 }}>
         {/* Score Breakdown */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
