@@ -1,0 +1,67 @@
+# CortexHire — Render.com Deployment Configuration
+# https://render.com/docs/render-yaml-spec
+
+services:
+  - type: web
+    name: cortexhire-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    healthCheckPath: /health
+
+    envVars:
+      - key: APP_ENV
+        value: production
+
+      - key: CORS_ORIGINS
+        value: http://localhost:3000,https://cortexhire.vercel.app
+
+      # ── LLM Keys (set in Render Dashboard → Environment) ──
+      - key: GROQ_API_KEY
+        sync: false          # marks as secret — must be set manually in dashboard
+
+      - key: OPENAI_API_KEY
+        sync: false
+
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # ── LLM Config ──
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_FALLBACK
+        value: openai
+      - key: OFFLINE_MODE
+        value: "false"
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-small
+
+      # ── Database (SQLite — persisted disk on Render) ──
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./cortexhire.db
+      - key: USE_SQLITE
+        value: "true"
+
+      # ── Qdrant (in-memory — resets on restart, fine for demo) ──
+      - key: QDRANT_IN_MEMORY
+        value: "true"
+      - key: QDRANT_COLLECTION_CANDIDATES
+        value: candidate_capabilities
+      - key: QDRANT_COLLECTION_ROLES
+        value: role_genomes
+
+      # ── Neo4j (disabled) ──
+      - key: NEO4J_ENABLED
+        value: "false"
+
+      # ── App ──
+      - key: SECRET_KEY
+        sync: false          # set in dashboard
