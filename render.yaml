@@ -6,13 +6,16 @@ services:
     name: cortexhire-api
     runtime: python
     rootDir: backend
-    pythonVersion: "3.12.8"
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --only-binary=:all: numpy scikit-learn && pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: free
     healthCheckPath: /health
 
     envVars:
+      # ── Python version (highest precedence — overrides .python-version file) ──
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+
       - key: APP_ENV
         value: production
 
