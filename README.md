@@ -2,7 +2,11 @@
 
 > **Don't hire resumes. Hire potential.**
 
-🌐 **Live Demo:** [https://cortexhire.vercel.app](https://cortexhire.vercel.app)
+| | |
+|---|---|
+| 🌐 **Frontend (Vercel)** | [https://cortexhire.vercel.app](https://cortexhire.vercel.app) |
+| ⚡ **Backend API (Render)** | [https://cortexhire.onrender.com](https://cortexhire.onrender.com) |
+| 📖 **API Docs** | [https://cortexhire.onrender.com/docs](https://cortexhire.onrender.com/docs) |
 
 CortexHire is a full-stack AI recruitment platform that ranks candidates the way an elite recruiter thinks — with full context, zero bias, and deep intelligence.
 
@@ -48,7 +52,7 @@ git clone https://github.com/infinity-me/CortexHire.git
 cd CortexHire
 ```
 
-### 2. Backend
+### 2. Backend (local dev)
 
 ```bash
 cd backend
@@ -57,7 +61,10 @@ cp ../.env.example .env   # fill in your API keys
 python main.py
 ```
 
-### 3. Frontend
+**Backend is live at:** [https://cortexhire.onrender.com](https://cortexhire.onrender.com)  
+**API Docs:** [https://cortexhire.onrender.com/docs](https://cortexhire.onrender.com/docs)
+
+### 3. Frontend (local dev)
 
 ```bash
 cd frontend
@@ -65,7 +72,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+**Frontend is live at:** [https://cortexhire.vercel.app](https://cortexhire.vercel.app)
+
+Open [http://localhost:3000](http://localhost:3000) for local dev
 
 ---
 
