@@ -141,7 +141,63 @@ async def get_latest_ranking(job_id: str, session: AsyncSession = Depends(get_se
     return await get_ranking_results(run.id, session)
 
 
+async def _score_single_candidate(
+    candidate: "Candidate",
+    job_dict: dict,
+    role_genome: dict,
+    role_embeddings: dict,
+) -> dict:
+    """Score one candidate through all agents + embeddings. Safe to run in parallel."""
+    candidate_dict = {
+        "id": candidate.id,
+        "name": candidate.name,
+        "headline": candidate.headline,
+        "location": candidate.location,
+        "summary": candidate.summary,
+        "years_experience": candidate.years_experience,
+        "education_tier": candidate.education_tier,
+        "education_detail": candidate.education_detail,
+        "career_history": candidate.career_history or [],
+        "skills": candidate.skills or [],
+        "achievements": candidate.achievements or [],
+        "capability_profile": candidate.capability_profile or {},
+    }
+
+    agent_results, candidate_embeddings = await asyncio.gather(
+        run_all_agents(candidate_dict, job_dict, role_genome),
+        generate_candidate_embeddings(candidate_dict),
+    )
+
+    dimension_sims = compute_dimension_similarity(candidate_embeddings, role_embeddings, role_genome)
+    embedding_similarity = aggregate_similarity_score(dimension_sims, role_genome)
+    temporal_profile = compute_temporal_profile(candidate_dict)
+    bias_analysis = detect_bias_signals(candidate_dict)
+
+    consensus = compute_consensus_score(
+        agent_results=agent_results,
+        embedding_similarity=embedding_similarity,
+        temporal_profile=temporal_profile,
+        bias_analysis=bias_analysis,
+        role_genome=role_genome,
+    )
+
+    return {
+        "candidate": candidate_dict,
+        "candidate_db": candidate,
+        "agent_results": agent_results,
+        "consensus": consensus,
+        "bias_analysis": bias_analysis,
+        "temporal_profile": temporal_profile,
+    }
+
+
 async def _execute_ranking_pipeline(run_id: str, job_id: str, shortlist_size: int):
+    """
+    Run the full ranking pipeline for a job.
+    Candidates are scored in parallel batches of 3 to balance speed vs rate limits.
+    """
+    BATCH_SIZE = 3  # parallel candidates per batch — safe for Groq free tier
+
     from db.postgres import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         try:
@@ -158,55 +214,33 @@ async def _execute_ranking_pipeline(run_id: str, job_id: str, shortlist_size: in
             run.total_candidates = len(candidates)
             await session.commit()
 
-            job_dict = {"id": job.id, "title": job.title, "company": job.company, "description": job.description, "seniority": job.seniority}
+            job_dict = {
+                "id": job.id, "title": job.title, "company": job.company,
+                "description": job.description, "seniority": job.seniority,
+            }
             role_genome = job.role_genome or {}
-
             role_embeddings = await generate_role_embeddings(role_genome, job.description)
 
-            scored = []
-            for candidate in candidates:
-                candidate_dict = {
-                    "id": candidate.id,
-                    "name": candidate.name,
-                    "headline": candidate.headline,
-                    "location": candidate.location,
-                    "summary": candidate.summary,
-                    "years_experience": candidate.years_experience,
-                    "education_tier": candidate.education_tier,
-                    "education_detail": candidate.education_detail,
-                    "career_history": candidate.career_history or [],
-                    "skills": candidate.skills or [],
-                    "achievements": candidate.achievements or [],
-                    "capability_profile": candidate.capability_profile or {},
-                }
-
-                agent_results, candidate_embeddings = await asyncio.gather(
-                    run_all_agents(candidate_dict, job_dict, role_genome),
-                    generate_candidate_embeddings(candidate_dict),
+            # ── Score candidates in parallel batches ──────────────────
+            scored: list[dict] = []
+            for batch_start in range(0, len(candidates), BATCH_SIZE):
+                batch = candidates[batch_start: batch_start + BATCH_SIZE]
+                batch_results = await asyncio.gather(
+                    *[_score_single_candidate(c, job_dict, role_genome, role_embeddings) for c in batch],
+                    return_exceptions=True,
                 )
+                for i, res in enumerate(batch_results):
+                    if isinstance(res, Exception):
+                        logger.warning(f"Candidate scoring failed ({batch[i].name}): {res}")
+                    else:
+                        scored.append(res)  # type: ignore[arg-type]
 
-                dimension_sims = compute_dimension_similarity(candidate_embeddings, role_embeddings, role_genome)
-                embedding_similarity = aggregate_similarity_score(dimension_sims, role_genome)
-                temporal_profile = compute_temporal_profile(candidate_dict)
-                bias_analysis = detect_bias_signals(candidate_dict)
+                # Update progress so the frontend status indicator advances
+                run.total_candidates = len(candidates)
+                await session.commit()
+                logger.info(f"Batch {batch_start // BATCH_SIZE + 1} complete — {len(scored)}/{len(candidates)} scored")
 
-                consensus = compute_consensus_score(
-                    agent_results=agent_results,
-                    embedding_similarity=embedding_similarity,
-                    temporal_profile=temporal_profile,
-                    bias_analysis=bias_analysis,
-                    role_genome=role_genome,
-                )
-
-                scored.append({
-                    "candidate": candidate_dict,
-                    "candidate_db": candidate,
-                    "agent_results": agent_results,
-                    "consensus": consensus,
-                    "bias_analysis": bias_analysis,
-                    "temporal_profile": temporal_profile,
-                })
-
+            # ── Rank + persist results ────────────────────────────────
             ranked = rank_candidates(scored, shortlist_size)
 
             for ranked_item in ranked:
@@ -232,7 +266,6 @@ async def _execute_ranking_pipeline(run_id: str, job_id: str, shortlist_size: in
                     explanation=explanation,
                     shortlisted=True,
                 )
-                # Set JSON fields via properties
                 ranking.agent_scores = {
                     "agent_results": ranked_item["agent_results"],
                     "embedding_similarity": consensus["embedding_similarity"],
@@ -248,7 +281,7 @@ async def _execute_ranking_pipeline(run_id: str, job_id: str, shortlist_size: in
 
             run.status = "complete"
             await session.commit()
-            logger.info(f"Ranking run {run_id} complete. {len(ranked)} candidates ranked.")
+            logger.info(f"Ranking run {run_id} complete — {len(ranked)} candidates ranked.")
 
         except Exception as e:
             logger.error(f"Ranking pipeline failed for run {run_id}: {e}", exc_info=True)

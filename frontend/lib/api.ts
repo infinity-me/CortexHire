@@ -83,7 +83,7 @@ export const rankingApi = {
   pollResults: async (
     runId: string,
     onProgress?: (status: string, count: number) => void,
-    maxWait: number = 120000
+    maxWait: number = 600000 // 10 min — enough for large candidate pools
   ): Promise<RankingRun> => {
     const start = Date.now();
     while (Date.now() - start < maxWait) {
