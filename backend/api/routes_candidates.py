@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from db.postgres import get_session
@@ -39,7 +39,7 @@ def _candidate_to_dict(c: Candidate) -> dict:
 
 @router.get("/")
 async def list_candidates(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(Candidate).order_by(Candidate.created_at.desc()))
+    result = await session.execute(select(Candidate).order_by(col(Candidate.created_at).desc()))
     return [_candidate_to_dict(c) for c in result.scalars().all()]
 
 

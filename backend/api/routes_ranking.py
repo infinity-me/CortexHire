@@ -7,7 +7,7 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from db.postgres import get_session
@@ -112,7 +112,7 @@ async def get_latest_ranking(job_id: str, session: AsyncSession = Depends(get_se
     result = await session.execute(
         select(RankingRun)
         .where(RankingRun.job_id == job_id, RankingRun.status == "complete")
-        .order_by(RankingRun.created_at.desc())
+        .order_by(col(RankingRun.created_at).desc())
         .limit(1)
     )
     run = result.scalars().first()

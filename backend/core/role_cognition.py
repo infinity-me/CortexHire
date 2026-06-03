@@ -115,7 +115,7 @@ def _validate_and_normalize_genome(genome: dict) -> dict:
 
     for field in scalar_fields:
         val = genome.get(field, defaults[field])
-        genome[field] = max(0.0, min(1.0, float(val)))
+        genome[field] = max(0.0, min(1.0, float(val if val is not None else defaults[field])))
 
     for field in list_fields:
         if field not in genome or not isinstance(genome[field], list):

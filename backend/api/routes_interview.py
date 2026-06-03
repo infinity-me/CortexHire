@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -492,7 +492,7 @@ async def generate_report(
 
     # Persist final scores
     interview.status = "complete"
-    interview.completed_at = datetime.utcnow()
+    interview.completed_at = datetime.now(timezone.utc)
     interview.total_score = total
     interview.answer_quality_score = answer_quality_avg
     interview.communication_score = communication_avg
