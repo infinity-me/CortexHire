@@ -200,10 +200,16 @@ async def _seed_demo_data():
 async def _seed_dataset_candidates():
     """
     Import real candidates from the competition dataset on first startup.
-    Uses sample_candidates.json (50 records) if the dataset file exists.
-    The full candidates.jsonl (500k records) can be imported via CLI.
+
+    Priority order:
+    1. Local file: India_runs_data_and_ai_challenge/sample_candidates.json (50 records)
+    2. Embedded fallback: data/embedded_candidates.py (committed to repo, used on Render)
+
+    The full candidates.jsonl (500k records) can be imported via CLI:
+        python -m data.dataset_importer --file candidates.jsonl --limit 500
     """
-    import os
+    import json
+    import tempfile
     from pathlib import Path
     from sqlmodel import select
     from db.postgres import AsyncSessionLocal
@@ -218,7 +224,7 @@ async def _seed_dataset_candidates():
             logger.info("Dataset candidates already seeded — skipping.")
             return
 
-    # Find dataset file relative to this file's location
+    # Priority 1: local file from gitignored data folder
     backend_dir = Path(__file__).resolve().parent
     dataset_paths = [
         backend_dir.parent / "India_runs_data_and_ai_challenge" / "sample_candidates.json",
@@ -232,14 +238,32 @@ async def _seed_dataset_candidates():
             dataset_file = str(p)
             break
 
-    if not dataset_file:
-        logger.info("Competition dataset not found — skipping dataset seed (OK for production).")
+    if dataset_file:
+        logger.info(f"Seeding real candidates from local dataset: {dataset_file}")
+        from data.dataset_importer import import_candidates
+        count = await import_candidates(file_path=dataset_file, limit=50, skip_existing=True)
+        logger.info(f"Dataset seed complete: {count} real candidates imported.")
         return
 
-    logger.info(f"Seeding real candidates from competition dataset: {dataset_file}")
-    from data.dataset_importer import import_candidates
-    count = await import_candidates(file_path=dataset_file, limit=50, skip_existing=True)
-    logger.info(f"Dataset seed complete: {count} real candidates imported.")
+    # Priority 2: embedded fallback (committed to repo — works on Render/production)
+    try:
+        from data.embedded_candidates import SAMPLE_CANDIDATES
+        logger.info(f"Local dataset not found — seeding from embedded fallback ({len(SAMPLE_CANDIDATES)} records).")
+
+        # Write to a temp file so dataset_importer can reuse its existing logic
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as tmp:
+            json.dump(SAMPLE_CANDIDATES, tmp, ensure_ascii=False)
+            tmp_path = tmp.name
+
+        from data.dataset_importer import import_candidates
+        count = await import_candidates(file_path=tmp_path, limit=len(SAMPLE_CANDIDATES), skip_existing=True)
+
+        Path(tmp_path).unlink(missing_ok=True)
+        logger.info(f"Embedded dataset seed complete: {count} real candidates imported.")
+    except ImportError:
+        logger.info("No embedded dataset found — skipping dataset seed (OK for bare installs).")
 
 
 @asynccontextmanager
