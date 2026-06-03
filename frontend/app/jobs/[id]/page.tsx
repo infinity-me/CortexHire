@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   Brain, Zap, Play, ChevronLeft, Loader2,
-  Target, Shield, TrendingUp, Eye
+  Target, Shield, TrendingUp, Eye, History, Download, FileSpreadsheet, ExternalLink
 } from "lucide-react";
 import { jobsApi, rankingApi } from "@/lib/api";
 import type { Job } from "@/lib/types";
@@ -22,9 +22,17 @@ export default function JobDetailPage() {
   const [rankStatus, setRankStatus] = useState("");
   const [runId, setRunId] = useState<string | null>(null);
   const [preFilterLimit, setPreFilterLimit] = useState(50);
+  const [pastRuns, setPastRuns] = useState<Array<{
+    run_id: string; status: string; total_candidates: number;
+    shortlist_size: number; created_at: string;
+  }>>([]);
 
   useEffect(() => {
-    jobsApi.get(id).then((j) => { setJob(j); setLoading(false); }).catch(() => setLoading(false));
+    jobsApi.get(id).then((j) => {
+      setJob(j); setLoading(false);
+      // Load past runs after job loads
+      rankingApi.listRuns(id).then(setPastRuns).catch(() => {});
+    }).catch(() => setLoading(false));
   }, [id]);
 
   const handleAnalyze = async () => {
@@ -52,6 +60,8 @@ export default function JobDetailPage() {
           status;
         setRankStatus(label);
       });
+      // Refresh past runs list
+      rankingApi.listRuns(job.id).then(setPastRuns).catch(() => {});
       router.push(`/ranking/${run_id}`);
     } catch (e) {
       setRankStatus("Ranking failed. Please try again.");
@@ -150,6 +160,72 @@ export default function JobDetailPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Past Ranking Runs */}
+      {pastRuns.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+          className="glass-card" style={{ padding: 20, marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <History size={14} color="#a78bfa" />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.06em" }}>RANKING HISTORY</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 4 }}>{pastRuns.length} run{pastRuns.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pastRuns.map((run, i) => (
+              <div key={run.run_id} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "10px 14px", borderRadius: 10,
+                background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>#{i + 1}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                      {run.total_candidates ?? "—"} candidates · top {run.shortlist_size}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {run.created_at ? new Date(run.created_at).toLocaleString() : ""}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
+                    background: run.status === "complete" ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)",
+                    color: run.status === "complete" ? "#10b981" : "#f59e0b",
+                    border: `1px solid ${run.status === "complete" ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}`
+                  }}>
+                    {run.status.toUpperCase()}
+                  </span>
+                  {run.status === "complete" && (
+                    <>
+                      <Link href={`/ranking/${run.run_id}`} style={{
+                        display: "flex", alignItems: "center", gap: 4,
+                        padding: "5px 10px", borderRadius: 7, textDecoration: "none",
+                        background: "rgba(124,58,237,0.15)", color: "#a78bfa",
+                        fontSize: 11, fontWeight: 600
+                      }}>
+                        <ExternalLink size={11} /> View
+                      </Link>
+                      <button
+                        onClick={() => rankingApi.downloadCsv(run.run_id)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 4,
+                          padding: "5px 10px", borderRadius: 7, cursor: "pointer",
+                          background: "rgba(16,185,129,0.15)", border: "none",
+                          color: "#10b981", fontSize: 11, fontWeight: 600
+                        }}
+                      >
+                        <Download size={11} /> CSV
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: genome ? "1fr 380px" : "1fr", gap: 20 }}>
         {/* Left: JD + genome details */}

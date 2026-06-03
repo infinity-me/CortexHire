@@ -139,6 +139,7 @@ async def get_ranking_results(run_id: str, session: AsyncSession = Depends(get_s
     return {"run_id": run_id, "job_id": run.job_id, "status": run.status, "total_candidates": run.total_candidates, "results": output}
 
 
+
 @router.get("/job/{job_id}/latest")
 async def get_latest_ranking(job_id: str, session: AsyncSession = Depends(get_session)):
     result = await session.execute(
@@ -151,6 +152,84 @@ async def get_latest_ranking(job_id: str, session: AsyncSession = Depends(get_se
     if not run:
         return {"status": "no_results", "results": [], "job_id": job_id}
     return await get_ranking_results(run.id, session)
+
+
+@router.get("/job/{job_id}/runs")
+async def list_ranking_runs(job_id: str, session: AsyncSession = Depends(get_session)):
+    """List all past ranking runs for a job (most recent first)."""
+    result = await session.execute(
+        select(RankingRun)
+        .where(RankingRun.job_id == job_id)
+        .order_by(col(RankingRun.created_at).desc())
+    )
+    runs = result.scalars().all()
+    return [
+        {
+            "run_id": r.id,
+            "status": r.status,
+            "total_candidates": r.total_candidates,
+            "shortlist_size": r.shortlist_size,
+            "created_at": r.created_at,
+        }
+        for r in runs
+    ]
+
+
+@router.get("/results/{run_id}/download")
+async def download_ranking_csv(run_id: str, session: AsyncSession = Depends(get_session)):
+    """
+    Download ranked results as CSV in the India Runs competition format:
+    candidate_id, rank, score, reasoning
+    """
+    import csv, io
+    from fastapi.responses import StreamingResponse
+
+    run = await session.get(RankingRun, run_id)
+    if not run:
+        raise HTTPException(404, "Ranking run not found")
+    if run.status != "complete":
+        raise HTTPException(400, f"Ranking run is not complete (status: {run.status})")
+
+    result = await session.execute(
+        select(CandidateRanking)
+        .where(CandidateRanking.run_id == run_id)
+        .order_by(CandidateRanking.rank_position)
+    )
+    rankings = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["candidate_id", "rank", "score", "reasoning"])
+
+    for ranking in rankings:
+        candidate = await session.get(Candidate, ranking.candidate_id)
+        cid = ranking.candidate_id  # default: DB UUID
+        if candidate and candidate.raw_profile:
+            try:
+                import json as _json
+                raw = _json.loads(candidate.raw_profile) if isinstance(candidate.raw_profile, str) else candidate.raw_profile
+                cid = raw.get("candidate_id") or cid  # prefer original CAND_XXXXX id
+            except Exception:
+                pass
+        score = round(ranking.fit_score / 100, 4)  # normalise 0–100 → 0.0–1.0
+        reasoning = (ranking.explanation or "").replace("\n", " ").strip()[:300]
+        # Fallback reasoning if empty
+        if not reasoning and candidate:
+            exp = getattr(candidate, "years_experience", 0) or 0
+            skills = candidate.skills or []
+            reasoning = (
+                f"{candidate.headline or candidate.name} with {exp:.1f} yrs experience; "
+                f"{len(skills)} key skills; fit score {score:.4f}."
+            )
+        writer.writerow([cid, ranking.rank_position, f"{score:.4f}", reasoning])
+
+    output.seek(0)
+    filename = f"cortexhire_ranking_{run_id[:8]}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 async def _fast_prefilter_candidates(

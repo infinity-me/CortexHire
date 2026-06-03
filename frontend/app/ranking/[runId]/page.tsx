@@ -8,7 +8,7 @@ import type { RankingRun, RankedCandidate } from "@/lib/types";
 import CandidateCard from "@/components/ranking/CandidateCard";
 import AgentDebate from "@/components/ranking/AgentDebate";
 import BiasReport from "@/components/ranking/BiasReport";
-import { Trophy, Users, Loader2, ChevronLeft } from "lucide-react";
+import { Trophy, Users, Loader2, ChevronLeft, Download, FileSpreadsheet } from "lucide-react";
 import Link from "next/link";
 
 export default function RankingResultsPage() {
@@ -41,17 +41,36 @@ export default function RankingResultsPage() {
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-          <Trophy size={20} color="#f59e0b" />
-          <h1 style={{ fontSize: 28, fontWeight: 800, fontFamily: "'Space Grotesk', sans-serif" }}>
-            AI Ranking Results
-          </h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Trophy size={20} color="#f59e0b" />
+            <h1 style={{ fontSize: 28, fontWeight: 800, fontFamily: "'Space Grotesk', sans-serif" }}>
+              AI Ranking Results
+            </h1>
+          </div>
+          {/* Download CSV — competition format */}
+          <button
+            onClick={() => rankingApi.downloadCsv(runId)}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 18px", borderRadius: 10, cursor: "pointer",
+              background: "linear-gradient(135deg, #059669, #10b981)",
+              border: "none", color: "white", fontSize: 13, fontWeight: 600,
+              boxShadow: "0 4px 16px rgba(16,185,129,0.3)",
+            }}
+          >
+            <FileSpreadsheet size={15} />
+            Download Rankings CSV
+            <Download size={13} />
+          </button>
         </div>
         <div style={{ display: "flex", gap: 20 }}>
           <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>
             <strong style={{ color: "var(--text-primary)" }}>{results.length}</strong> candidates ranked from{" "}
             <strong style={{ color: "var(--text-primary)" }}>{data.total_candidates}</strong> analyzed
           </span>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>·</span>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Format: candidate_id, rank, score, reasoning</span>
         </div>
       </motion.div>
 

@@ -112,6 +112,17 @@ export const rankingApi = {
     const res = await api.get(`/api/ranking/job/${jobId}/latest`);
     return res.data;
   },
+  listRuns: async (jobId: string): Promise<Array<{
+    run_id: string; status: string; total_candidates: number;
+    shortlist_size: number; created_at: string;
+  }>> => {
+    const res = await api.get(`/api/ranking/job/${jobId}/runs`);
+    return res.data;
+  },
+  downloadCsv: (runId: string) => {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    window.open(`${API_BASE}/api/ranking/results/${runId}/download`, '_blank');
+  },
   // Poll until complete
   pollResults: async (
     runId: string,
