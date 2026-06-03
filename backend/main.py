@@ -197,12 +197,58 @@ async def _seed_demo_data():
         logger.info(f"{len(INTERVIEW_SESSIONS)} interview sessions seeded.")
 
 
+async def _seed_dataset_candidates():
+    """
+    Import real candidates from the competition dataset on first startup.
+    Uses sample_candidates.json (50 records) if the dataset file exists.
+    The full candidates.jsonl (500k records) can be imported via CLI.
+    """
+    import os
+    from pathlib import Path
+    from sqlmodel import select
+    from db.postgres import AsyncSessionLocal
+    from db.models import Candidate
+
+    # Check if real dataset candidates already exist
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Candidate).where(Candidate.raw_profile.contains("CAND_")).limit(1)  # type: ignore
+        )
+        if result.scalars().first():
+            logger.info("Dataset candidates already seeded — skipping.")
+            return
+
+    # Find dataset file relative to this file's location
+    backend_dir = Path(__file__).resolve().parent
+    dataset_paths = [
+        backend_dir.parent / "India_runs_data_and_ai_challenge" / "sample_candidates.json",
+        Path("India_runs_data_and_ai_challenge") / "sample_candidates.json",
+        Path("sample_candidates.json"),
+    ]
+
+    dataset_file = None
+    for p in dataset_paths:
+        if p.exists():
+            dataset_file = str(p)
+            break
+
+    if not dataset_file:
+        logger.info("Competition dataset not found — skipping dataset seed (OK for production).")
+        return
+
+    logger.info(f"Seeding real candidates from competition dataset: {dataset_file}")
+    from data.dataset_importer import import_candidates
+    count = await import_candidates(file_path=dataset_file, limit=50, skip_existing=True)
+    logger.info(f"Dataset seed complete: {count} real candidates imported.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     logger.info("CortexHire API starting up...")
     logger.info(f"   LLM Provider: {settings.active_llm}")
     logger.info(f"   Environment: {settings.app_env}")
+
 
     # Initialize databases
     try:
@@ -228,6 +274,13 @@ async def lifespan(app: FastAPI):
         await _seed_demo_data()
     except Exception as e:
         logger.warning(f"Demo data seeding skipped: {e}")
+
+    # Seed real candidates from competition dataset (sample_candidates.json)
+    try:
+        await _seed_dataset_candidates()
+    except Exception as e:
+        logger.warning(f"Dataset candidates seeding skipped: {e}")
+
 
     yield
 
