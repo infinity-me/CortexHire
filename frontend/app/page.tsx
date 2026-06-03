@@ -12,16 +12,16 @@ import { jobsApi, candidatesApi, rankingApi } from "@/lib/api";
 import type { Job } from "@/lib/types";
 
 const INNOVATIONS = [
-  { icon: "🧠", label: "Role Cognition Engine", desc: "Extracts Role Genome from JDs" },
-  { icon: "🌐", label: "Life Graph Intelligence", desc: "Career trajectories, not resumes" },
-  { icon: "⚡", label: "Capability Embeddings", desc: "Multi-vector semantic matching" },
-  { icon: "🤖", label: "5-Agent Simulation", desc: "Parallel expert recruiter AI" },
-  { icon: "📊", label: "Explainable Rankings", desc: "Evidence-based reasoning" },
-  { icon: "🏢", label: "Org DNA Matching", desc: "Culture-capability alignment" },
-  { icon: "📈", label: "Temporal Intelligence", desc: "Career momentum analysis" },
-  { icon: "⚖️", label: "Ethical AI Layer", desc: "Bias detection & correction" },
-  { icon: "💬", label: "Recruiter Copilot", desc: "Conversational AI assistant" },
-  { icon: "🎥", label: "Live Interview AI", desc: "Posture & answer scoring" },
+  { icon: "🧠", label: "Role Cognition Engine",  desc: "Extracts Role Genome from JDs",      href: "/jobs" },
+  { icon: "🌐", label: "Life Graph Intelligence", desc: "Career trajectories, not resumes",   href: "/candidates" },
+  { icon: "⚡", label: "Capability Embeddings",   desc: "Multi-vector semantic matching",    href: "/ranking" },
+  { icon: "🤖", label: "5-Agent Simulation",      desc: "Parallel expert recruiter AI",      href: "/ranking" },
+  { icon: "📊", label: "Explainable Rankings",    desc: "Evidence-based reasoning",          href: "/ranking" },
+  { icon: "🏢", label: "Org DNA Matching",        desc: "Culture-capability alignment",      href: "/candidates" },
+  { icon: "📈", label: "Temporal Intelligence",   desc: "Career momentum analysis",          href: "/ranking" },
+  { icon: "⚖️", label: "Ethical AI Layer",        desc: "Bias detection & correction",       href: "/ranking" },
+  { icon: "💬", label: "Recruiter Copilot",       desc: "Conversational AI assistant",       href: "/copilot" },
+  { icon: "🎥", label: "Live Interview AI",       desc: "Posture & answer scoring",          href: "/interview" },
 ];
 
 function StatCard({
@@ -300,18 +300,19 @@ export default function DashboardPage() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
           {INNOVATIONS.map((item, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.8 + i * 0.05 }}
-              className="glass-card"
-              style={{ padding: "14px 16px", textAlign: "center" }}
-            >
-              <div style={{ fontSize: 22, marginBottom: 6 }}>{item.icon}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 3, color: "var(--text-primary)" }}>{item.label}</div>
-              <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.4 }}>{item.desc}</div>
-            </motion.div>
+            <Link key={i} href={item.href} style={{ textDecoration: "none" }}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.8 + i * 0.05 }}
+                className="glass-card"
+                style={{ padding: "14px 16px", textAlign: "center", cursor: "pointer", transition: "all 0.2s ease" }}
+              >
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{item.icon}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 3, color: "var(--text-primary)" }}>{item.label}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.4 }}>{item.desc}</div>
+              </motion.div>
+            </Link>
           ))}
         </div>
       </motion.div>
