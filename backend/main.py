@@ -25,6 +25,35 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _seed_jobs_if_empty():
+    """Insert the 5 synthetic jobs on first run (or after a DB wipe)."""
+    from sqlmodel import select
+    from db.postgres import AsyncSessionLocal
+    from db.models import Job
+    from data.synthetic_jobs import SYNTHETIC_JOBS
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Job).limit(1))
+        if result.scalars().first() is not None:
+            logger.info("Jobs table already has data — skipping seed.")
+            return
+
+        logger.info(f"Seeding {len(SYNTHETIC_JOBS)} synthetic jobs...")
+        for job_data in SYNTHETIC_JOBS:
+            job = Job(
+                title=job_data["title"],
+                company=job_data["company"],
+                description=job_data["description"],
+                location=job_data.get("location", ""),
+                employment_type=job_data.get("employment_type", "full-time"),
+                seniority=job_data.get("seniority", ""),
+                status="pending",
+            )
+            session.add(job)
+        await session.commit()
+        logger.info("✅ Synthetic jobs seeded successfully.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
@@ -44,6 +73,13 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Neo4j connected")
     except Exception as e:
         logger.warning(f"⚠️ Neo4j not available (graph features disabled): {e}")
+
+    # Seed synthetic jobs if the table is empty (e.g. fresh deploy or DB wipe)
+    try:
+        await _seed_jobs_if_empty()
+        logger.info("✅ Job seed check complete")
+    except Exception as e:
+        logger.warning(f"⚠️ Job seeding skipped: {e}")
 
     yield
 
