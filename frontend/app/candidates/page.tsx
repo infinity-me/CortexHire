@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, MapPin, Upload, X, CheckCircle, AlertCircle,
-  Loader2, FileText, ChevronRight, TrendingUp, Sparkles
+  Loader2, FileText, ChevronRight, TrendingUp, Sparkles, Database
 } from "lucide-react";
 import { candidatesApi } from "@/lib/api";
 import type { Candidate } from "@/lib/types";
@@ -37,6 +37,14 @@ export default function CandidatesPage() {
   const [results, setResults] = useState<UploadResult[]>([]);
   const [uploadDone, setUploadDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dataset import state
+  const [datasetFile, setDatasetFile] = useState<File | null>(null);
+  const [datasetLimit, setDatasetLimit] = useState(500);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const datasetInputRef = useRef<HTMLInputElement>(null);
 
   const loadCandidates = () => {
     candidatesApi.list()
@@ -81,6 +89,28 @@ export default function CandidatesPage() {
 
   function removeFile(name: string) {
     setQueued(prev => prev.filter(f => f.name !== name));
+  }
+
+  async function handleDatasetImport() {
+    if (!datasetFile || importing) return;
+    setImporting(true);
+    setImportResult(null);
+    setImportError(null);
+    try {
+      const { import_id } = await candidatesApi.importDataset(datasetFile, datasetLimit);
+      const result = await candidatesApi.pollImportStatus(import_id, (status, imported) => {
+        // status updates handled by button label
+        void status; void imported;
+      });
+      setImportResult(result);
+      setDatasetFile(null);
+      setLoading(true);
+      loadCandidates();
+    } catch (e: unknown) {
+      setImportError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
   }
 
   const successCount = results.filter(r => r.status === "success").length;
@@ -300,6 +330,135 @@ export default function CandidatesPage() {
             </motion.div>
           )}
         </AnimatePresence>
+      </motion.div>
+
+      {/* Dataset Import Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="glass-card"
+        style={{ padding: 24, marginBottom: 24 }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <Database size={16} color="#06b6d4" />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Bulk Dataset Import
+          </span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 4 }}>
+            .jsonl · .json · up to 10,000 candidates
+          </span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "end" }}>
+          <div>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 14, lineHeight: 1.6 }}>
+              Import candidates from a competition dataset file. The system uses the
+              existing <strong>dataset_importer</strong> to map fields — no LLM parsing needed.
+            </p>
+
+            <input
+              id="dataset-file-input"
+              ref={datasetInputRef}
+              type="file"
+              accept=".json,.jsonl"
+              style={{ display: "none" }}
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) { setDatasetFile(f); setImportResult(null); setImportError(null); }
+              }}
+            />
+
+            <div
+              onClick={() => datasetInputRef.current?.click()}
+              style={{
+                padding: "14px 18px", borderRadius: 10, cursor: "pointer",
+                border: datasetFile ? "1px solid rgba(6,182,212,0.5)" : "1px dashed var(--border-subtle)",
+                background: datasetFile ? "rgba(6,182,212,0.08)" : "var(--bg-elevated)",
+                display: "flex", alignItems: "center", gap: 12,
+                transition: "all 0.2s ease",
+              }}
+            >
+              {datasetFile ? (
+                <>
+                  <FileText size={18} color="#06b6d4" />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#06b6d4" }}>{datasetFile.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {(datasetFile.size / 1024 / 1024).toFixed(1)} MB
+                    </div>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); setDatasetFile(null); }}
+                    style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Database size={18} color="var(--text-muted)" />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Select dataset file</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>candidates.jsonl or sample_candidates.json</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>IMPORT LIMIT</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#06b6d4" }}>{datasetLimit.toLocaleString()} candidates</span>
+              </div>
+              <input
+                id="dataset-limit-slider"
+                type="range" min={50} max={5000} step={50}
+                value={datasetLimit}
+                onChange={e => setDatasetLimit(Number(e.target.value))}
+                style={{ width: "100%", accentColor: "#06b6d4", cursor: "pointer" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                <span>50</span><span>2,500</span><span>5,000</span>
+              </div>
+            </div>
+
+            {importResult && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 10, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)", marginBottom: 12 }}>
+                <CheckCircle size={14} color="#10b981" />
+                <span style={{ fontSize: 13, color: "#10b981", fontWeight: 600 }}>
+                  {importResult.imported} candidates imported successfully
+                </span>
+              </div>
+            )}
+            {importError && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 10, background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.25)", marginBottom: 12 }}>
+                <AlertCircle size={14} color="#f43f5e" />
+                <span style={{ fontSize: 12, color: "#f43f5e" }}>{importError}</span>
+              </div>
+            )}
+
+            <button
+              id="dataset-import-btn"
+              onClick={handleDatasetImport}
+              disabled={!datasetFile || importing}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                padding: "11px 20px", borderRadius: 10, cursor: !datasetFile || importing ? "not-allowed" : "pointer",
+                background: !datasetFile || importing ? "rgba(6,182,212,0.2)" : "linear-gradient(135deg, #0891b2, #06b6d4)",
+                border: "none", color: "white", fontSize: 13, fontWeight: 600,
+                opacity: !datasetFile ? 0.6 : 1,
+              }}
+            >
+              {importing
+                ? <><Loader2 size={14} className="animate-spin" /> Importing… (this may take a while)</>
+                : <><Database size={14} /> Import {datasetLimit.toLocaleString()} Candidates</>
+              }
+            </button>
+          </div>
+        </div>
       </motion.div>
 
       {/* Candidates Grid */}

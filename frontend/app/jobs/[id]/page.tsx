@@ -21,6 +21,7 @@ export default function JobDetailPage() {
   const [ranking, setRanking] = useState(false);
   const [rankStatus, setRankStatus] = useState("");
   const [runId, setRunId] = useState<string | null>(null);
+  const [preFilterLimit, setPreFilterLimit] = useState(50);
 
   useEffect(() => {
     jobsApi.get(id).then((j) => { setJob(j); setLoading(false); }).catch(() => setLoading(false));
@@ -42,10 +43,14 @@ export default function JobDetailPage() {
     setRanking(true);
     setRankStatus("Starting ranking pipeline...");
     try {
-      const { run_id } = await rankingApi.startRun(id, 10);
+      const { run_id } = await rankingApi.startRun(job.id, 10, preFilterLimit);
       setRunId(run_id);
       await rankingApi.pollResults(run_id, (status, count) => {
-        setRankStatus(`${status === "processing" ? "Running 5-agent analysis" : status}... ${count} candidates`);
+        const label =
+          status === "prefiltering" ? `Phase 1: Filtering ${count} candidates…` :
+          status === "processing" ? `Phase 2: Running 5-agent analysis… ${count} candidates` :
+          status;
+        setRankStatus(label);
       });
       router.push(`/ranking/${run_id}`);
     } catch (e) {
@@ -92,7 +97,7 @@ export default function JobDetailPage() {
             </span>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10, flexDirection: "column", alignItems: "flex-end" }}>
             {job.status !== "ready" && (
               <button
                 onClick={handleAnalyze}
@@ -108,6 +113,24 @@ export default function JobDetailPage() {
                 {analyzing ? "Analyzing..." : "Analyze JD"}
               </button>
             )}
+
+            {/* Pre-filter slider */}
+            {job.status === "ready" && !ranking && (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                  Analyze top <strong style={{ color: "#a78bfa" }}>{preFilterLimit}</strong> candidates
+                  {" "}· ~{Math.ceil(preFilterLimit / 3 * 0.5)} min
+                </div>
+                <input
+                  id="prefilter-slider"
+                  type="range" min={25} max={500} step={25}
+                  value={preFilterLimit}
+                  onChange={e => setPreFilterLimit(Number(e.target.value))}
+                  style={{ width: 160, accentColor: "#7c3aed", cursor: "pointer" }}
+                />
+              </div>
+            )}
+
             <button
               onClick={handleRank}
               disabled={ranking || job.status !== "ready"}

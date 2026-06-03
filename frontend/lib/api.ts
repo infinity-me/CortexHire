@@ -58,13 +58,46 @@ export const candidatesApi = {
     });
     return res.data;
   },
+  importDataset: async (file: File, limit: number = 500): Promise<{
+    import_id: string; status: string; filename: string; limit: number; message: string;
+  }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('limit', String(limit));
+    const res = await api.post(`/api/candidates/import-dataset?limit=${limit}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000, // upload timeout only — actual import is async
+    });
+    return res.data;
+  },
+  getImportStatus: async (importId: string): Promise<{
+    import_id: string; status: string; imported: number; filename: string; error?: string;
+  }> => {
+    const res = await api.get(`/api/candidates/import-status/${importId}`);
+    return res.data;
+  },
+  pollImportStatus: async (
+    importId: string,
+    onProgress?: (status: string, imported: number) => void,
+    maxWait: number = 600000
+  ): Promise<{ imported: number }> => {
+    const start = Date.now();
+    while (Date.now() - start < maxWait) {
+      const s = await candidatesApi.getImportStatus(importId);
+      onProgress?.(s.status, s.imported);
+      if (s.status === 'complete') return { imported: s.imported };
+      if (s.status === 'failed') throw new Error(s.error || 'Import failed');
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    throw new Error('Import timed out');
+  },
 };
 
 // ─── Ranking ─────────────────────────────────────────────────
 
 export const rankingApi = {
-  startRun: async (jobId: string, shortlistSize: number = 10): Promise<{ run_id: string }> => {
-    const res = await api.post(`/api/ranking/run/${jobId}?shortlist_size=${shortlistSize}`);
+  startRun: async (jobId: string, shortlistSize: number = 10, preFilterLimit: number = 100): Promise<{ run_id: string; pre_filter_limit: number }> => {
+    const res = await api.post(`/api/ranking/run/${jobId}?shortlist_size=${shortlistSize}&pre_filter_limit=${preFilterLimit}`);
     return res.data;
   },
   getStatus: async (runId: string): Promise<{ run_id: string; status: string; total_candidates: number }> => {
@@ -95,6 +128,7 @@ export const rankingApi = {
       if (status.status === 'failed') {
         throw new Error('Ranking pipeline failed');
       }
+      // prefiltering and processing are both valid in-progress states
       await new Promise(r => setTimeout(r, 2000));
     }
     throw new Error('Ranking timed out');

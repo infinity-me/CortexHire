@@ -32,40 +32,52 @@ async def run_ranking(
     job_id: str,
     background_tasks: BackgroundTasks,
     shortlist_size: int = 10,
+    pre_filter_limit: int = 100,
     session: AsyncSession = Depends(get_session),
 ):
+    """
+    Start a ranking pipeline for a job.
+
+    Args:
+        shortlist_size:    Final number of candidates to include in results (default 10).
+        pre_filter_limit:  Max candidates to deep-analyze with LLM agents (default 100).
+                           Phase 1 uses fast embedding similarity to pick the top
+                           pre_filter_limit from ALL candidates, then Phase 2 runs
+                           the 5-agent LLM analysis only on that shortlist.
+                           Set to 0 to disable pre-filtering (analyze all candidates).
+    """
     job = await session.get(Job, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
 
-    # Gap 1 fix: auto-extract role genome if not yet done — no manual "Analyze" step needed
     if not job.role_genome:
-        logger.info(f"Job {job_id} has no role genome yet — auto-extracting before ranking...")
+        logger.info(f"Job {job_id} has no role genome — auto-extracting before ranking...")
         from core.role_cognition import extract_role_genome
         try:
             genome = await extract_role_genome(job.description, job.title, job.company)
             job.role_genome = genome
             job.status = "ready"
-            session.add(job)
-            await session.commit()
-            await session.refresh(job)
-            logger.info(f"Auto-extracted role genome for job {job_id}")
         except Exception as e:
             logger.warning(f"Auto-genome extraction failed for {job_id}: {e} — using defaults")
             from core.role_cognition import _default_genome
             job.role_genome = _default_genome()
             job.status = "ready"
-            session.add(job)
-            await session.commit()
-            await session.refresh(job)
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
 
     run = RankingRun(job_id=job_id, status="pending", shortlist_size=shortlist_size)
     session.add(run)
     await session.commit()
     await session.refresh(run)
 
-    background_tasks.add_task(_execute_ranking_pipeline, run.id, job_id, shortlist_size)
-    return {"run_id": run.id, "status": "processing", "message": "Ranking pipeline started — role genome auto-extracted if needed"}
+    background_tasks.add_task(_execute_ranking_pipeline, run.id, job_id, shortlist_size, pre_filter_limit)
+    return {
+        "run_id": run.id,
+        "status": "processing",
+        "pre_filter_limit": pre_filter_limit,
+        "message": f"Ranking pipeline started — Phase 1 will pre-filter to top {pre_filter_limit} candidates",
+    }
 
 
 
@@ -141,6 +153,51 @@ async def get_latest_ranking(job_id: str, session: AsyncSession = Depends(get_se
     return await get_ranking_results(run.id, session)
 
 
+async def _fast_prefilter_candidates(
+    candidates: list,
+    role_genome: dict,
+    role_embeddings: dict,
+    limit: int,
+) -> list:
+    """
+    Phase 1 — Fast pre-filter using embedding similarity only (no LLM).
+    Scores every candidate in ~milliseconds using mock/real embeddings,
+    then returns the top `limit` by semantic similarity score.
+    This scales to 100k+ candidates.
+    """
+    if limit <= 0 or len(candidates) <= limit:
+        return candidates  # no filtering needed
+
+    logger.info(f"Phase 1 pre-filter: scoring {len(candidates)} candidates by embedding similarity...")
+    scored_fast: list[tuple[float, object]] = []
+
+    for candidate in candidates:
+        cand_dict = {
+            "id": candidate.id,
+            "name": candidate.name,
+            "summary": candidate.summary or "",
+            "years_experience": candidate.years_experience,
+            "education_tier": candidate.education_tier,
+            "education_detail": candidate.education_detail,
+            "career_history": candidate.career_history or [],
+            "skills": candidate.skills or [],
+            "achievements": candidate.achievements or [],
+            "capability_profile": candidate.capability_profile or {},
+        }
+        try:
+            cand_embeddings = await generate_candidate_embeddings(cand_dict)
+            dim_sims = compute_dimension_similarity(cand_embeddings, role_embeddings, role_genome)
+            sim_score = aggregate_similarity_score(dim_sims, role_genome)
+        except Exception:
+            sim_score = 0.0
+        scored_fast.append((sim_score, candidate))
+
+    scored_fast.sort(key=lambda x: x[0], reverse=True)
+    top = [c for _, c in scored_fast[:limit]]
+    logger.info(f"Phase 1 complete — kept top {len(top)} of {len(candidates)} candidates for deep analysis")
+    return top
+
+
 async def _score_single_candidate(
     candidate: "Candidate",
     job_dict: dict,
@@ -191,10 +248,11 @@ async def _score_single_candidate(
     }
 
 
-async def _execute_ranking_pipeline(run_id: str, job_id: str, shortlist_size: int):
+async def _execute_ranking_pipeline(run_id: str, job_id: str, shortlist_size: int, pre_filter_limit: int = 100):
     """
-    Run the full ranking pipeline for a job.
-    Candidates are scored in parallel batches of 3 to balance speed vs rate limits.
+    Run the full ranking pipeline for a job — 2-phase approach:
+      Phase 1: Fast embedding pre-filter — scores ALL candidates, keeps top pre_filter_limit
+      Phase 2: Deep 5-agent LLM analysis on pre-filtered set only (parallel batches of 3)
     """
     BATCH_SIZE = 3  # parallel candidates per batch — safe for Groq free tier
 
@@ -221,7 +279,19 @@ async def _execute_ranking_pipeline(run_id: str, job_id: str, shortlist_size: in
             role_genome = job.role_genome or {}
             role_embeddings = await generate_role_embeddings(role_genome, job.description)
 
-            # ── Score candidates in parallel batches ──────────────────
+            # ── Phase 1: Fast embedding pre-filter ────────────────────
+            if pre_filter_limit > 0 and len(candidates) > pre_filter_limit:
+                run.status = "prefiltering"
+                await session.commit()
+                candidates = await _fast_prefilter_candidates(
+                    candidates, role_genome, role_embeddings, pre_filter_limit
+                )
+                run.total_candidates = len(candidates)
+                run.status = "processing"
+                await session.commit()
+                logger.info(f"Phase 1 done — {len(candidates)} candidates entering deep analysis")
+
+            # ── Phase 2: Deep 5-agent LLM analysis ───────────────────
             scored: list[dict] = []
             for batch_start in range(0, len(candidates), BATCH_SIZE):
                 batch = candidates[batch_start: batch_start + BATCH_SIZE]

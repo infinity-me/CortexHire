@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
+import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -33,6 +35,9 @@ from core.temporal import compute_temporal_profile
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/candidates", tags=["Candidates"])
+
+# ── In-memory import job tracker ──────────────────────────────
+_import_jobs: dict[str, dict] = {}
 
 
 # ── LLM prompt for extracting candidate profile from resume text ──
@@ -263,3 +268,85 @@ async def get_candidate(candidate_id: str, session: AsyncSession = Depends(get_s
             "years_experience": d["years_experience"] or 0,
         })
     return d
+
+
+# ── Dataset Import ────────────────────────────────────────────
+
+async def _run_dataset_import(import_id: str, tmp_path: str, limit: int, file_ext: str):
+    """Background task: run dataset_importer and update the job tracker."""
+    import os
+    _import_jobs[import_id]["status"] = "running"
+    try:
+        from data.dataset_importer import import_candidates
+        count = await import_candidates(file_path=tmp_path, limit=limit, skip_existing=True)
+        _import_jobs[import_id].update({"status": "complete", "imported": count})
+        logger.info(f"Dataset import {import_id} complete: {count} imported")
+    except Exception as e:
+        logger.error(f"Dataset import {import_id} failed: {e}", exc_info=True)
+        _import_jobs[import_id].update({"status": "failed", "error": str(e)[:300]})
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+@router.post("/import-dataset")
+async def import_dataset(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    limit: int = 500,
+):
+    """
+    Upload a .jsonl or .json candidate dataset file and import up to `limit` candidates.
+
+    The import runs in the background. Poll GET /api/candidates/import-status/{import_id}
+    to check progress.
+
+    Args:
+        file:   .jsonl or .json dataset file (e.g. candidates.jsonl)
+        limit:  Maximum candidates to import (default 500, max 10000)
+    """
+    filename = file.filename or "upload"
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ".json"
+    if ext not in (".json", ".jsonl"):
+        raise HTTPException(400, "Only .json and .jsonl files are supported")
+    if limit < 1 or limit > 10_000:
+        raise HTTPException(400, "limit must be between 1 and 10000")
+
+    content = await file.read()
+    if len(content) > 200 * 1024 * 1024:  # 200 MB max
+        raise HTTPException(400, "File too large (max 200 MB)")
+
+    # Write to temp file so dataset_importer can stream it
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=ext, delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    import_id = str(uuid.uuid4())
+    _import_jobs[import_id] = {
+        "import_id": import_id,
+        "status": "queued",
+        "filename": filename,
+        "limit": limit,
+        "imported": 0,
+        "error": None,
+    }
+
+    background_tasks.add_task(_run_dataset_import, import_id, tmp_path, limit, ext)
+    return {
+        "import_id": import_id,
+        "status": "queued",
+        "filename": filename,
+        "limit": limit,
+        "message": f"Import started — up to {limit} candidates will be imported in the background.",
+    }
+
+
+@router.get("/import-status/{import_id}")
+async def get_import_status(import_id: str):
+    """Poll the status of a background dataset import."""
+    job = _import_jobs.get(import_id)
+    if not job:
+        raise HTTPException(404, "Import job not found")
+    return job
