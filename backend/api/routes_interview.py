@@ -1,13 +1,14 @@
 """
-CortexHire — Live Interview Panel API Routes
+CortexHire - Live Interview Panel API Routes
 
 Endpoints:
-  POST /api/interview/start           — Generate questions + create session
-  POST /api/interview/evaluate-answer — Score a candidate's answer (text)
-  POST /api/interview/analyze-frame   — Analyze posture/body language from image
-  POST /api/interview/report/{id}     — Aggregate all scores into final report
-  GET  /api/interview/sessions        — List past interview sessions
-  GET  /api/interview/session/{id}    — Get session details + answers
+  POST /api/interview/parse-resume      - Extract text from an uploaded resume (PDF/DOCX/TXT)
+  POST /api/interview/start             - Generate questions + create session
+  POST /api/interview/evaluate-answer   - Score a candidate's answer (text)
+  POST /api/interview/analyze-frame     - Analyze posture/body language from image
+  POST /api/interview/report/{id}       - Aggregate all scores into final report
+  GET  /api/interview/sessions          - List past interview sessions
+  GET  /api/interview/session/{id}      - Get session details + answers
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -40,6 +41,8 @@ class StartInterviewRequest(BaseModel):
     custom_role_title: Optional[str] = None
     custom_company: Optional[str] = None
     custom_description: Optional[str] = None
+    # Resume context (extracted text from uploaded PDF/DOCX)
+    resume_context: Optional[str] = None
 
 
 class EvaluateAnswerRequest(BaseModel):
@@ -70,14 +73,14 @@ Job Title: {title}
 Company: {company}
 Job Description: {description}
 Role Genome (AI-extracted traits): {genome}
-
+{resume_section}
 Generate exactly {num_questions} interview questions for this role. The questions must:
-1. Be specific to this job — not generic HR questions
+1. Be specific to this job - not generic HR questions
 2. Cover: technical depth (2 questions), ownership/execution (1), problem-solving (1), behavioral (1), situational/culture (1)
-3. Be concise (1-2 sentences each) — clearly worded, no ambiguity
-4. Be genuinely challenging — not softballs
-5. Be ordered from warm-up → hard → behavioral → closing
-
+3. Be concise (1-2 sentences each) - clearly worded, no ambiguity
+4. Be genuinely challenging - not softballs
+5. Be ordered from warm-up -> hard -> behavioral -> closing
+{resume_instruction}
 Return ONLY a valid JSON array of strings. No extra text, no numbering, no markdown.
 Example: ["Question 1?", "Question 2?", ...]
 """
@@ -198,6 +201,60 @@ Return ONLY valid JSON:
 
 # ─── Endpoints ──────────────────────────────────────────────
 
+@router.post("/parse-resume")
+async def parse_resume(file: UploadFile = File(...)):
+    """Extract plain text from an uploaded resume (PDF, DOCX, or TXT)."""
+    filename = (file.filename or "").lower()
+    content = await file.read()
+
+    if len(content) > 10 * 1024 * 1024:  # 10 MB limit
+        raise HTTPException(400, "File too large (max 10 MB)")
+
+    text = ""
+
+    if filename.endswith(".pdf"):
+        try:
+            import io
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(content))
+            pages = [page.extract_text() or "" for page in reader.pages]
+            text = "\n".join(pages).strip()
+        except Exception as e:
+            raise HTTPException(422, f"Could not parse PDF: {e}")
+
+    elif filename.endswith(".docx"):
+        try:
+            import io
+            from docx import Document
+            doc = Document(io.BytesIO(content))
+            text = "\n".join(para.text for para in doc.paragraphs if para.text.strip())
+        except Exception as e:
+            raise HTTPException(422, f"Could not parse DOCX: {e}")
+
+    elif filename.endswith(".txt") or filename.endswith(".md"):
+        try:
+            text = content.decode("utf-8", errors="ignore").strip()
+        except Exception as e:
+            raise HTTPException(422, f"Could not read text file: {e}")
+
+    else:
+        raise HTTPException(415, "Unsupported file type. Please upload PDF, DOCX, or TXT.")
+
+    if not text:
+        raise HTTPException(422, "No text could be extracted from the file. Try a different format.")
+
+    # Truncate to ~3000 words to stay within LLM context limits
+    words = text.split()
+    if len(words) > 3000:
+        text = " ".join(words[:3000]) + "... [truncated]"
+
+    return {
+        "filename": file.filename,
+        "text": text,
+        "word_count": len(words),
+    }
+
+
 @router.post("/start")
 async def start_interview(
     req: StartInterviewRequest,
@@ -234,12 +291,31 @@ async def start_interview(
         if isinstance(v, float)
     ) if genome else "Not available"
 
+    # Build resume section for the prompt
+    resume_section = ""
+    resume_instruction = ""
+    if req.resume_context and req.resume_context.strip():
+        resume_snippet = req.resume_context.strip()[:2000]  # limit tokens
+        resume_section = f"""
+Candidate Resume:
+{resume_snippet}
+"""
+        resume_instruction = """
+6. IMPORTANT - since you have the candidate's resume:
+   - Reference their specific past companies/projects in 1-2 questions
+   - Probe claimed skills with concrete examples ("You listed X, tell me about a time...")
+   - Ask about career transitions or gaps if any
+   - Make the interview feel personal and tailored, not generic
+"""
+
     prompt = QUESTION_GEN_PROMPT.format(
         title=job.title,
         company=job.company,
         description=(job.description or "")[:800],
         genome=genome_summary,
         num_questions=req.num_questions,
+        resume_section=resume_section,
+        resume_instruction=resume_instruction,
     )
 
     raw = await llm_chat(
@@ -270,9 +346,9 @@ async def start_interview(
         else:
             questions = _fallback_questions(job.title, req.num_questions)
 
-    # Create session in DB
+    # Create session in DB — use the actual job.id (important for custom roles)
     interview_session = InterviewSession(
-        job_id=req.job_id,
+        job_id=job.id,
         candidate_name=req.candidate_name,
         candidate_email=req.candidate_email,
         status="active",

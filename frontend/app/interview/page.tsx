@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { Video, User, Mail, Briefcase, ChevronRight, Clock, AlertCircle, CheckCircle, PenLine } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Video, User, Mail, Briefcase, ChevronRight, Clock,
+  AlertCircle, CheckCircle, PenLine, FileText, Upload, X, Loader2
+} from "lucide-react";
 import { jobsApi, interviewApi } from "@/lib/api";
 import type { Job, InterviewSessionSummary } from "@/lib/types";
 
@@ -27,6 +30,15 @@ export default function InterviewSetupPage() {
   const [customCompany, setCustomCompany] = useState("");
   const [customDescription, setCustomDescription] = useState("");
 
+  // Resume upload state
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeText, setResumeText] = useState<string>("");
+  const [resumeParsing, setResumeParsing] = useState(false);
+  const [resumeError, setResumeError] = useState("");
+  const [resumeWordCount, setResumeWordCount] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     Promise.all([
       jobsApi.list().catch(() => []),
@@ -40,6 +52,49 @@ export default function InterviewSetupPage() {
   }, []);
 
   const selectedJob = jobs.find(j => j.id === selectedJobId);
+
+  async function handleResumeFile(file: File) {
+    const validTypes = [".pdf", ".docx", ".txt", ".md"];
+    const ext = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!validTypes.includes(ext)) {
+      setResumeError("Unsupported file type. Upload PDF, DOCX, or TXT.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setResumeError("File too large (max 10 MB).");
+      return;
+    }
+    setResumeFile(file);
+    setResumeError("");
+    setResumeText("");
+    setResumeParsing(true);
+    try {
+      const result = await interviewApi.parseResume(file);
+      setResumeText(result.text);
+      setResumeWordCount(result.word_count);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not parse resume";
+      setResumeError(msg);
+      setResumeFile(null);
+    } finally {
+      setResumeParsing(false);
+    }
+  }
+
+  function handleFileDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleResumeFile(file);
+  }
+
+  function clearResume() {
+    setResumeFile(null);
+    setResumeText("");
+    setResumeError("");
+    setResumeWordCount(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   async function handleStart() {
     if (useCustomRole) {
@@ -60,8 +115,16 @@ export default function InterviewSetupPage() {
             customTitle.trim(),
             customCompany.trim() || undefined,
             customDescription.trim() || undefined,
+            resumeText || undefined,
           )
-        : await interviewApi.start(selectedJobId, candidateName.trim(), candidateEmail || undefined, numQuestions);
+        : await interviewApi.start(
+            selectedJobId,
+            candidateName.trim(),
+            candidateEmail || undefined,
+            numQuestions,
+            undefined, undefined, undefined,
+            resumeText || undefined,
+          );
       sessionStorage.setItem(`interview_${session.session_id}`, JSON.stringify(session));
       router.push(`/interview/session/${session.session_id}`);
     } catch (e: unknown) {
@@ -70,12 +133,6 @@ export default function InterviewSetupPage() {
       setStarting(false);
     }
   }
-
-  const verdictColor = (verdict: string) => {
-    if (verdict === "strong_hire" || verdict === "hire") return "#10b981";
-    if (verdict === "maybe") return "#f59e0b";
-    return "#f43f5e";
-  };
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -99,7 +156,7 @@ export default function InterviewSetupPage() {
               Live Interview Panel
             </h1>
             <p style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>
-              AI-generated questions · Real-time posture analysis · Honest scoring
+              AI-generated questions · Resume-aware · Real-time posture analysis · Honest scoring
             </p>
           </div>
         </div>
@@ -145,7 +202,6 @@ export default function InterviewSetupPage() {
             {loading ? (
               <div className="skeleton" style={{ height: 44, borderRadius: 10 }} />
             ) : useCustomRole ? (
-              /* Custom role inputs */
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <input
                   id="custom-role-title"
@@ -191,7 +247,6 @@ export default function InterviewSetupPage() {
                 </div>
               </div>
             ) : (
-              /* Dropdown for seeded jobs */
               <select
                 id="job-select"
                 value={selectedJobId}
@@ -265,6 +320,131 @@ export default function InterviewSetupPage() {
             />
           </div>
 
+          {/* Resume Upload */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-secondary)" }}>
+              <FileText size={14} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+              Candidate Resume <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional — AI personalizes questions)</span>
+            </label>
+
+            <AnimatePresence mode="wait">
+              {resumeFile && resumeText ? (
+                /* Parsed successfully */
+                <motion.div
+                  key="parsed"
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  style={{
+                    padding: "12px 14px", borderRadius: 10,
+                    background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8,
+                      background: "rgba(16,185,129,0.15)", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <CheckCircle size={16} color="#10b981" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                        {resumeFile.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#10b981" }}>
+                        ✓ Parsed — {resumeWordCount} words · AI will personalize questions from this resume
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearResume}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: "var(--text-muted)", padding: 4, borderRadius: 6,
+                      display: "flex", alignItems: "center",
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </motion.div>
+              ) : resumeParsing ? (
+                /* Parsing in progress */
+                <motion.div
+                  key="parsing"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  style={{
+                    padding: "12px 14px", borderRadius: 10,
+                    background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)",
+                    display: "flex", alignItems: "center", gap: 10,
+                  }}
+                >
+                  <Loader2 size={16} color="#a78bfa" style={{ animation: "spin 0.8s linear infinite" }} />
+                  <span style={{ fontSize: 13, color: "#a78bfa" }}>Parsing resume...</span>
+                </motion.div>
+              ) : (
+                /* Drop zone */
+                <motion.div
+                  key="dropzone"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleFileDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    padding: "20px 16px", borderRadius: 10, cursor: "pointer",
+                    border: `2px dashed ${dragOver ? "rgba(124,58,237,0.6)" : "var(--border-default)"}`,
+                    background: dragOver ? "rgba(124,58,237,0.06)" : "var(--bg-elevated)",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    background: dragOver ? "rgba(124,58,237,0.15)" : "rgba(255,255,255,0.05)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.2s ease",
+                  }}>
+                    <Upload size={16} color={dragOver ? "#a78bfa" : "var(--text-muted)"} />
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: dragOver ? "#a78bfa" : "var(--text-secondary)" }}>
+                    Drop resume here or click to browse
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    PDF, DOCX, TXT · Max 10 MB
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.txt,.md"
+              style={{ display: "none" }}
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) handleResumeFile(f);
+              }}
+            />
+
+            {resumeError && (
+              <div style={{
+                marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 12,
+                background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.2)",
+                color: "#f43f5e", display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <AlertCircle size={12} />
+                {resumeError}
+              </div>
+            )}
+          </div>
+
           {/* Questions Count */}
           <div style={{ marginBottom: 28 }}>
             <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-secondary)" }}>
@@ -313,7 +493,7 @@ export default function InterviewSetupPage() {
             {starting ? (
               <>
                 <div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                Generating Questions...
+                {resumeText ? "Building personalized questions..." : "Generating Questions..."}
               </>
             ) : (
               <>
@@ -325,9 +505,9 @@ export default function InterviewSetupPage() {
           </button>
         </motion.div>
 
-        {/* Right panel: info + recent sessions */}
+        {/* Right panel */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* What to expect */}
+          {/* What the AI Scores */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -353,6 +533,30 @@ export default function InterviewSetupPage() {
                 <div className="progress-bar">
                   <div className="progress-fill" style={{ width: `${item.pct * 2.5}%`, background: item.color }} />
                 </div>
+              </div>
+            ))}
+          </motion.div>
+
+          {/* Resume tip card */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.25 }}
+            className="glass-card"
+            style={{ padding: 20, background: "rgba(124,58,237,0.06)", borderColor: "rgba(124,58,237,0.2)" }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 12 }}>
+              ✦ Resume-Aware AI
+            </div>
+            {[
+              "References actual companies & projects from the resume",
+              "Probes claimed skills with concrete examples",
+              "Asks about career transitions and gaps",
+              "Makes every interview feel personal, not generic",
+            ].map((tip, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, fontSize: 12 }}>
+                <span style={{ color: "#a78bfa", marginTop: 1, flexShrink: 0 }}>→</span>
+                <span style={{ color: "var(--text-secondary)" }}>{tip}</span>
               </div>
             ))}
           </motion.div>
@@ -430,6 +634,7 @@ export default function InterviewSetupPage() {
         @keyframes spin { to { transform: rotate(360deg); } }
         select option { background: #1a2035; }
         input[type="text"]:focus, input[type="email"]:focus { border-color: rgba(124,58,237,0.5); }
+        textarea:focus { border-color: rgba(124,58,237,0.5) !important; outline: none; }
       `}</style>
     </div>
   );

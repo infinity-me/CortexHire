@@ -118,6 +118,15 @@ export const healthApi = {
 // ─── Interview ────────────────────────────────────────────────
 
 export const interviewApi = {
+  parseResume: async (file: File): Promise<{ filename: string; text: string; word_count: number }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/api/interview/parse-resume', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+
   start: async (
     jobId: string,
     candidateName: string,
@@ -126,6 +135,7 @@ export const interviewApi = {
     customRoleTitle?: string,
     customCompany?: string,
     customDescription?: string,
+    resumeContext?: string,
   ): Promise<InterviewStartResponse> => {
     const res = await api.post('/api/interview/start', {
       job_id: jobId,
@@ -135,6 +145,7 @@ export const interviewApi = {
       custom_role_title: customRoleTitle,
       custom_company: customCompany,
       custom_description: customDescription,
+      resume_context: resumeContext,
     });
     return res.data;
   },

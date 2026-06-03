@@ -1,37 +1,39 @@
-# CortexHire Backend — Python Dependencies (No-Docker Edition)
+# CortexHire Backend - Python Dependencies (No-Docker Edition)
 
-# ─── Web Framework ──────────────────────────────────────────
+# --- Web Framework -------------------------------------------
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
 python-multipart==0.0.12
 python-dotenv==1.0.1
 
-# ─── Database (SQLite — no server needed) ───────────────────
+# --- Database (SQLite) ---------------------------------------
 sqlmodel==0.0.21
 aiosqlite==0.20.0
 
-# ─── Vector DB (in-memory Qdrant — no server needed) ────────
+# --- Vector DB (in-memory Qdrant) ----------------------------
 qdrant-client==1.12.1
 
-# ─── LLM Providers ──────────────────────────────────────────
+# --- LLM Providers -------------------------------------------
 groq==0.13.1
 openai==1.58.1
 google-generativeai==0.8.3
 
-# ─── Embeddings & NLP ───────────────────────────────────────
+# --- Embeddings & NLP ----------------------------------------
 numpy==2.3.0
 scikit-learn==1.7.0
 
-# ─── Data & Utilities ───────────────────────────────────────
+# --- Data & Utilities ----------------------------------------
 pydantic==2.10.3
 pydantic-settings==2.7.0
 httpx==0.28.1
 aiofiles==24.1.0
 tenacity==9.0.0
 
-# ─── Validation & Parsing ───────────────────────────────────
+# --- Validation & Parsing ------------------------------------
 python-dateutil==2.9.0
+pypdf==4.3.1
+python-docx==1.1.2
 
-# ─── Dev ────────────────────────────────────────────────────
+# --- Dev -----------------------------------------------------
 pytest==8.3.4
 pytest-asyncio==0.25.0
