@@ -19,8 +19,8 @@ openai==1.58.1
 google-generativeai==0.8.3
 
 # ─── Embeddings & NLP ───────────────────────────────────────
-numpy==2.2.3
-scikit-learn==1.6.1
+numpy==2.3.0
+scikit-learn==1.7.0
 
 # ─── Data & Utilities ───────────────────────────────────────
 pydantic==2.10.3
