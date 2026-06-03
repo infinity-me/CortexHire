@@ -25,9 +25,9 @@ export default function CopilotPage() {
 
   useEffect(() => {
     jobsApi.list().then((j) => {
-      const ready = j.filter((x) => x.status === "ready");
-      setJobs(ready);
-      if (ready.length > 0) setSelectedJob(ready[0]);
+      // Show all jobs, not just "ready" ones - copilot works even without role genome
+      setJobs(j);
+      if (j.length > 0) setSelectedJob(j[0]);
       setLoadingJobs(false);
     }).catch(() => setLoadingJobs(false));
   }, []);
@@ -83,7 +83,7 @@ export default function CopilotPage() {
           {loadingJobs ? (
             <div className="skeleton" style={{ width: 200, height: 36, borderRadius: 8 }} />
           ) : jobs.length === 0 ? (
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>No analyzed jobs found. Analyze a job first.</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>No jobs found. Jobs will appear here automatically.</div>
           ) : (
             jobs.map((job) => (
               <button key={job.id} onClick={() => { setSelectedJob(job); setMessages([]); }} style={{

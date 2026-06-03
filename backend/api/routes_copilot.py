@@ -77,21 +77,30 @@ async def copilot_chat(
         for r in rankings:
             candidate = await session.get(Candidate, r.candidate_id)
             name = candidate.name if candidate else "Unknown"
-            explanation_snippet = (r.explanation or "")[:300]
+            headline = (candidate.headline or "")[:60] if candidate else ""
+            explanation_snippet = (r.explanation or "")[:250]
+            shortlist_tag = " [SHORTLISTED]" if r.shortlisted else ""
             ranking_lines.append(
-                f"#{r.rank_position} {name} | Fit: {r.fit_score:.0f} | Risk: {r.risk_score:.0f} | "
-                f"Growth: {r.growth_score:.0f} | Success: {r.success_probability*100:.0f}% | "
-                f"Summary: {explanation_snippet}"
+                f"#{r.rank_position}{shortlist_tag} {name} | {headline}\n"
+                f"  Fit: {r.fit_score:.0f}/100 | Risk: {r.risk_score:.0f}/100 | "
+                f"Growth: {r.growth_score:.0f}/100 | Success: {r.success_probability:.0f}%\n"
+                f"  Assessment: {explanation_snippet}"
             )
-        ranking_context = "\n".join(ranking_lines)
+        ranking_context = "\n\n".join(ranking_lines)
 
     genome = job.role_genome or {}
+
+    def _pct(key: str) -> str:
+        v = genome.get(key)
+        return f"{v:.0%}" if isinstance(v, (int, float)) else "N/A"
+
     context_message = f"""
 JOB: {job.title} at {job.company}
-ROLE GENOME: Technical depth {genome.get('technical_depth', 0):.0%}, Ownership {genome.get('ownership', 0):.0%}, Startup readiness {genome.get('startup_readiness', 0):.0%}
+LOCATION: {job.location or "Not specified"} | SENIORITY: {job.seniority or "Not specified"}
+ROLE GENOME: Technical depth {_pct("technical_depth")} | Ownership {_pct("ownership")} | Startup readiness {_pct("startup_readiness")}
 
 RANKED CANDIDATES:
-{ranking_context if ranking_context else "No ranking available yet — run the AI ranking first."}
+{ranking_context if ranking_context else "No ranking data yet. I can still answer general questions about this job, discuss what to look for in candidates, or help you think through the role requirements."}
     """.strip()
 
     history_result = await session.execute(
