@@ -377,12 +377,12 @@ export default function CandidatesPage() {
                           <div style={{ fontSize: 9, color: "var(--text-muted)", width: 30 }}>{label}</div>
                           <div className="progress-bar" style={{ flex: 1 }}>
                             <div className="progress-fill" style={{
-                              width: `${((cap as Record<string, number>)[key] || 0) * 100}%`,
+                              width: `${((cap as unknown as Record<string, number>)[key] || 0) * 100}%`,
                               background: color
                             }} />
                           </div>
                           <div style={{ fontSize: 9, color: "var(--text-secondary)", width: 24, textAlign: "right" }}>
-                            {Math.round(((cap as Record<string, number>)[key] || 0) * 100)}
+                            {Math.round(((cap as unknown as Record<string, number>)[key] || 0) * 100)}
                           </div>
                         </div>
                       ))}
