@@ -37,8 +37,27 @@ async def run_ranking(
     job = await session.get(Job, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
+
+    # Gap 1 fix: auto-extract role genome if not yet done — no manual "Analyze" step needed
     if not job.role_genome:
-        raise HTTPException(400, "Job must be analyzed first. Call /api/jobs/{id}/analyze")
+        logger.info(f"Job {job_id} has no role genome yet — auto-extracting before ranking...")
+        from core.role_cognition import extract_role_genome
+        try:
+            genome = await extract_role_genome(job.description, job.title, job.company)
+            job.role_genome = genome
+            job.status = "ready"
+            session.add(job)
+            await session.commit()
+            await session.refresh(job)
+            logger.info(f"Auto-extracted role genome for job {job_id}")
+        except Exception as e:
+            logger.warning(f"Auto-genome extraction failed for {job_id}: {e} — using defaults")
+            from core.role_cognition import _default_genome
+            job.role_genome = _default_genome()
+            job.status = "ready"
+            session.add(job)
+            await session.commit()
+            await session.refresh(job)
 
     run = RankingRun(job_id=job_id, status="pending", shortlist_size=shortlist_size)
     session.add(run)
@@ -46,7 +65,8 @@ async def run_ranking(
     await session.refresh(run)
 
     background_tasks.add_task(_execute_ranking_pipeline, run.id, job_id, shortlist_size)
-    return {"run_id": run.id, "status": "processing", "message": "Ranking pipeline started"}
+    return {"run_id": run.id, "status": "processing", "message": "Ranking pipeline started — role genome auto-extracted if needed"}
+
 
 
 @router.get("/run/{run_id}/status")

@@ -46,6 +46,18 @@ export const candidatesApi = {
     const res = await api.get('/api/candidates/count/total');
     return res.data.total;
   },
+  bulkUpload: async (files: File[]): Promise<{
+    total: number; succeeded: number; failed: number;
+    results: Array<{ filename: string; status: string; name?: string; headline?: string; candidate_id?: string; error?: string; }>
+  }> => {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    const res = await api.post('/api/candidates/bulk-upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 min for large batches
+    });
+    return res.data;
+  },
 };
 
 // ─── Ranking ─────────────────────────────────────────────────
