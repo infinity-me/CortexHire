@@ -153,7 +153,7 @@ async def _seed_demo_data():
         base_time = datetime.now(timezone.utc) - timedelta(days=14)
 
         for i, sd in enumerate(INTERVIEW_SESSIONS):
-            job_idx = sd["job_index"]
+            job_idx = int(sd["job_index"])
             job = jobs[job_idx] if job_idx < len(jobs) else jobs[0]
             session_time = base_time + timedelta(days=i * 2, hours=i % 3)
 
@@ -176,7 +176,7 @@ async def _seed_demo_data():
             await session.commit()
             await session.refresh(isession)
 
-            for q_idx, ans_data in enumerate(sd.get("answers", [])):
+            for q_idx, ans_data in enumerate(list(sd.get("answers", []))):
                 ans = InterviewAnswer(
                     session_id=isession.id,
                     question_index=q_idx,
