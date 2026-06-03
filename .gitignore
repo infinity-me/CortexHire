@@ -56,3 +56,6 @@ next-env.d.ts
 .env.*.local
 !.env.example
 secrets/
+
+# ─── Challenge / External Data ───────────────────────────────
+India_runs_data_and_ai_challenge/
