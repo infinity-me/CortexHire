@@ -26,11 +26,14 @@ logger = logging.getLogger(__name__)
 
 
 async def _seed_jobs_if_empty():
-    """Insert the 5 synthetic jobs on first run (or after a DB wipe)."""
+    """Insert the 5 synthetic jobs on first run (or after a DB wipe).
+    Each job is auto-analyzed so it starts as status='ready' for rankings.
+    """
     from sqlmodel import select
     from db.postgres import AsyncSessionLocal
     from db.models import Job
     from data.synthetic_jobs import SYNTHETIC_JOBS
+    from core.role_cognition import extract_role_genome, _default_genome
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Job).limit(1))
@@ -38,8 +41,20 @@ async def _seed_jobs_if_empty():
             logger.info("Jobs table already has data - skipping seed.")
             return
 
-        logger.info(f"Seeding {len(SYNTHETIC_JOBS)} synthetic jobs...")
+        logger.info(f"Seeding {len(SYNTHETIC_JOBS)} synthetic jobs with role genome analysis...")
         for job_data in SYNTHETIC_JOBS:
+            # Auto-analyze each job so it is immediately ready for rankings
+            try:
+                genome = await extract_role_genome(
+                    job_data["description"],
+                    job_data["title"],
+                    job_data["company"],
+                )
+                logger.info(f"  Role genome extracted for '{job_data['title']}'")
+            except Exception as e:
+                logger.warning(f"  Genome extraction failed for '{job_data['title']}': {e} — using default")
+                genome = _default_genome()
+
             job = Job(
                 title=job_data["title"],
                 company=job_data["company"],
@@ -47,11 +62,13 @@ async def _seed_jobs_if_empty():
                 location=job_data.get("location", ""),
                 employment_type=job_data.get("employment_type", "full-time"),
                 seniority=job_data.get("seniority", ""),
-                status="pending",
+                status="ready",  # immediately available for rankings
             )
+            job.role_genome = genome
             session.add(job)
+
         await session.commit()
-        logger.info("Synthetic jobs seeded successfully.")
+        logger.info("Synthetic jobs seeded and analyzed successfully.")
 
 
 async def _seed_demo_data():
