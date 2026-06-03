@@ -2,6 +2,8 @@
 
 > **Don't hire resumes. Hire potential.**
 
+🌐 **Live Demo:** [https://cortexhire.vercel.app](https://cortexhire.vercel.app)
+
 CortexHire is a full-stack AI recruitment platform that ranks candidates the way an elite recruiter thinks — with full context, zero bias, and deep intelligence.
 
 ---

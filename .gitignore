@@ -50,8 +50,9 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 
-# ─── Secrets (never commit) ──────────────────────────────────
+# ─── Secrets (never commit real env files) ───────────────────
 .env
 .env.local
 .env.*.local
+!.env.example
 secrets/

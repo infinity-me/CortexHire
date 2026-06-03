@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # App
     app_env: str = "development"
     app_port: int = 8000
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,https://cortexhire.vercel.app"
     secret_key: str = "dev-secret-key"
 
     # LLM
