@@ -32,10 +32,14 @@ router = APIRouter(prefix="/api/interview", tags=["Interview"])
 # ─── Request / Response Models ───────────────────────────────
 
 class StartInterviewRequest(BaseModel):
-    job_id: str
+    job_id: str                          # use "__custom__" for a custom role
     candidate_name: str
     candidate_email: Optional[str] = None
     num_questions: int = 6
+    # Custom role fields (used when job_id == "__custom__")
+    custom_role_title: Optional[str] = None
+    custom_company: Optional[str] = None
+    custom_description: Optional[str] = None
 
 
 class EvaluateAnswerRequest(BaseModel):
@@ -200,9 +204,29 @@ async def start_interview(
     session: AsyncSession = Depends(get_session),
 ):
     """Start a new interview session and generate tailored questions."""
-    job = await session.get(Job, req.job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
+
+    # Handle custom role: create a temporary Job on-the-fly
+    if req.job_id == "__custom__":
+        if not req.custom_role_title or not req.custom_role_title.strip():
+            raise HTTPException(400, "custom_role_title is required for a custom role interview")
+        company = (req.custom_company or "Your Company").strip()
+        description = (req.custom_description or "").strip() or (
+            f"Interview for the role of {req.custom_role_title} at {company}. "
+            "Generate relevant, challenging questions based on the role title."
+        )
+        job = Job(
+            title=req.custom_role_title.strip(),
+            company=company,
+            description=description,
+            status="custom",
+        )
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+    else:
+        job = await session.get(Job, req.job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
 
     genome = job.role_genome or {}
     genome_summary = ", ".join(

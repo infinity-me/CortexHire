@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Video, User, Mail, Briefcase, ChevronRight, Clock, AlertCircle, CheckCircle } from "lucide-react";
+import { Video, User, Mail, Briefcase, ChevronRight, Clock, AlertCircle, CheckCircle, PenLine } from "lucide-react";
 import { jobsApi, interviewApi } from "@/lib/api";
 import type { Job, InterviewSessionSummary } from "@/lib/types";
 
@@ -21,6 +21,12 @@ export default function InterviewSetupPage() {
   const [numQuestions, setNumQuestions] = useState(6);
   const [error, setError] = useState("");
 
+  // Custom role state
+  const [useCustomRole, setUseCustomRole] = useState(false);
+  const [customTitle, setCustomTitle] = useState("");
+  const [customCompany, setCustomCompany] = useState("");
+  const [customDescription, setCustomDescription] = useState("");
+
   useEffect(() => {
     Promise.all([
       jobsApi.list().catch(() => []),
@@ -36,13 +42,26 @@ export default function InterviewSetupPage() {
   const selectedJob = jobs.find(j => j.id === selectedJobId);
 
   async function handleStart() {
-    if (!selectedJobId) { setError("Please select a job"); return; }
+    if (useCustomRole) {
+      if (!customTitle.trim()) { setError("Please enter a job role title"); return; }
+    } else {
+      if (!selectedJobId) { setError("Please select a job"); return; }
+    }
     if (!candidateName.trim()) { setError("Please enter the candidate name"); return; }
     setError("");
     setStarting(true);
     try {
-      const session = await interviewApi.start(selectedJobId, candidateName.trim(), candidateEmail || undefined, numQuestions);
-      // Store session data for the live page to recover
+      const session = useCustomRole
+        ? await interviewApi.start(
+            "__custom__",
+            candidateName.trim(),
+            candidateEmail || undefined,
+            numQuestions,
+            customTitle.trim(),
+            customCompany.trim() || undefined,
+            customDescription.trim() || undefined,
+          )
+        : await interviewApi.start(selectedJobId, candidateName.trim(), candidateEmail || undefined, numQuestions);
       sessionStorage.setItem(`interview_${session.session_id}`, JSON.stringify(session));
       router.push(`/interview/session/${session.session_id}`);
     } catch (e: unknown) {
@@ -101,13 +120,78 @@ export default function InterviewSetupPage() {
 
           {/* Job Selector */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-secondary)" }}>
-              <Briefcase size={14} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
-              Job Role
-            </label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
+                <Briefcase size={14} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+                Job Role
+              </label>
+              <button
+                type="button"
+                onClick={() => { setUseCustomRole(v => !v); setError(""); }}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+                  background: useCustomRole ? "rgba(124,58,237,0.2)" : "var(--bg-elevated)",
+                  border: `1px solid ${useCustomRole ? "rgba(124,58,237,0.5)" : "var(--border-default)"}`,
+                  color: useCustomRole ? "#a78bfa" : "var(--text-muted)",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <PenLine size={11} />
+                {useCustomRole ? "Using custom role" : "Use custom role"}
+              </button>
+            </div>
+
             {loading ? (
               <div className="skeleton" style={{ height: 44, borderRadius: 10 }} />
+            ) : useCustomRole ? (
+              /* Custom role inputs */
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <input
+                  id="custom-role-title"
+                  type="text"
+                  placeholder="e.g. Senior React Developer, Product Manager, Data Analyst..."
+                  value={customTitle}
+                  onChange={e => setCustomTitle(e.target.value)}
+                  style={{
+                    width: "100%", padding: "10px 14px",
+                    background: "var(--bg-elevated)", border: "1px solid rgba(124,58,237,0.4)",
+                    borderRadius: 10, color: "var(--text-primary)", fontSize: 14, outline: "none",
+                    boxShadow: "0 0 0 3px rgba(124,58,237,0.08)",
+                  }}
+                />
+                <input
+                  id="custom-company"
+                  type="text"
+                  placeholder="Company name (optional)"
+                  value={customCompany}
+                  onChange={e => setCustomCompany(e.target.value)}
+                  style={{
+                    width: "100%", padding: "8px 14px",
+                    background: "var(--bg-elevated)", border: "1px solid var(--border-default)",
+                    borderRadius: 10, color: "var(--text-primary)", fontSize: 13, outline: "none",
+                  }}
+                />
+                <textarea
+                  id="custom-description"
+                  placeholder="Job description / context (optional — helps AI generate better questions)"
+                  value={customDescription}
+                  onChange={e => setCustomDescription(e.target.value)}
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "8px 14px",
+                    background: "var(--bg-elevated)", border: "1px solid var(--border-default)",
+                    borderRadius: 10, color: "var(--text-primary)", fontSize: 12, outline: "none",
+                    resize: "vertical", lineHeight: 1.5,
+                  }}
+                />
+                <div style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ color: "#a78bfa" }}>✦</span>
+                  AI will generate questions tailored to your custom role
+                </div>
+              </div>
             ) : (
+              /* Dropdown for seeded jobs */
               <select
                 id="job-select"
                 value={selectedJobId}
@@ -126,7 +210,8 @@ export default function InterviewSetupPage() {
                 ))}
               </select>
             )}
-            {selectedJob && (
+
+            {!useCustomRole && selectedJob && (
               <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                 <span style={{
                   fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20,

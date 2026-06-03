@@ -118,12 +118,23 @@ export const healthApi = {
 // ─── Interview ────────────────────────────────────────────────
 
 export const interviewApi = {
-  start: async (jobId: string, candidateName: string, candidateEmail?: string, numQuestions = 6): Promise<InterviewStartResponse> => {
+  start: async (
+    jobId: string,
+    candidateName: string,
+    candidateEmail?: string,
+    numQuestions = 6,
+    customRoleTitle?: string,
+    customCompany?: string,
+    customDescription?: string,
+  ): Promise<InterviewStartResponse> => {
     const res = await api.post('/api/interview/start', {
       job_id: jobId,
       candidate_name: candidateName,
       candidate_email: candidateEmail,
       num_questions: numQuestions,
+      custom_role_title: customRoleTitle,
+      custom_company: customCompany,
+      custom_description: customDescription,
     });
     return res.data;
   },
