@@ -14,6 +14,26 @@ export const metadata: Metadata = {
   title: "CortexHire — AI Recruitment Intelligence",
   description:
     "Don't hire resumes. Hire potential. AI-powered candidate ranking that thinks like an elite recruiter.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
+    apple: "/favicon.png",
+    shortcut: "/favicon.png",
+  },
+  openGraph: {
+    title: "CortexHire — AI Recruitment Intelligence",
+    description: "Don't hire resumes. Hire potential. AI-powered candidate ranking that thinks like an elite recruiter.",
+    images: [{ url: "/logo.png", width: 1200, height: 630, alt: "CortexHire Logo" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CortexHire — AI Recruitment Intelligence",
+    description: "Don't hire resumes. Hire potential.",
+    images: ["/logo.png"],
+  },
 };
 
 export default function RootLayout({

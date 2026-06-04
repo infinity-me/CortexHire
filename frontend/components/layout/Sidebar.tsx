@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Briefcase, Users, TrendingUp,
-  Bot, Zap, Video, X,
+  Bot, Video, X,
 } from "lucide-react";
 
 const NAV = [
@@ -51,12 +52,14 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 36, height: 36, borderRadius: 10,
-              background: "linear-gradient(135deg, #7c3aed, #06b6d4)",
+              background: "#080b14",
+              border: "1px solid rgba(124,58,237,0.35)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 0 20px rgba(124,58,237,0.4)",
+              boxShadow: "0 0 16px rgba(124,58,237,0.35), 0 0 4px rgba(6,182,212,0.2)",
               flexShrink: 0,
+              overflow: "hidden",
             }}>
-              <Zap size={18} color="white" fill="white" />
+              <Image src="/favicon.svg" alt="CortexHire" width={36} height={36} style={{ display: "block" }} />
             </div>
             <div>
               <div style={{
