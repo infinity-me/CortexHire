@@ -291,30 +291,63 @@ async def upload_and_run(
     jd_text: Optional[str] = Form(default=None),
     limit: int = Form(default=0),
 ):
+    """
+    Stream candidates file to disk (never reads entire file into RAM).
+    Supports files of any size as long as disk space allows.
+    """
     filename = file.filename or "candidates"
     suffix = ".jsonl" if filename.endswith(".jsonl") else ".json"
 
+    # ── Stream to disk in 4 MB chunks ─────────────────────────────────────────
+    MAX_BYTES = 700 * 1024 * 1024  # 700 MB hard limit
+    CHUNK = 4 * 1024 * 1024       # 4 MB chunks
+
     tmp = tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False, prefix="challenge_")
-    try:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-    finally:
-        tmp.close()
+    tmp_path = tmp.name
+    total_bytes = 0
+    candidate_count = 0
+    leftover = b""
 
     try:
-        if suffix == ".json":
-            data = json.loads(content.decode("utf-8"))
+        while True:
+            chunk = await file.read(CHUNK)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > MAX_BYTES:
+                tmp.close()
+                os.unlink(tmp_path)
+                raise HTTPException(413, f"File too large (>{MAX_BYTES//1024//1024} MB). Upload a smaller batch or run locally.")
+            tmp.write(chunk)
+
+            # Count newlines (approximate candidate count) during streaming
+            if suffix == ".jsonl":
+                combined = leftover + chunk
+                lines = combined.split(b"\n")
+                leftover = lines[-1]          # might be partial line
+                candidate_count += sum(1 for l in lines[:-1] if l.strip())
+
+        # flush the leftover
+        if suffix == ".jsonl" and leftover.strip():
+            candidate_count += 1
+    finally:
+        tmp.close()
+    file_size_mb = total_bytes / (1024 * 1024)
+    logger.info(f"Upload streamed: {filename} ({file_size_mb:.1f} MB) → {tmp_path}")
+
+    # For JSON files, count properly (small files only)
+    if suffix == ".json":
+        try:
+            with open(tmp_path, "r", encoding="utf-8") as f_in:
+                data = json.load(f_in)
             candidate_count = len(data) if isinstance(data, list) else 1
-        else:
-            candidate_count = sum(1 for l in content.decode("utf-8").splitlines() if l.strip())
-    except Exception as e:
-        os.unlink(tmp_path)
-        raise HTTPException(400, f"Invalid candidates file: {e}")
+        except Exception as e:
+            os.unlink(tmp_path)
+            raise HTTPException(400, f"Invalid JSON candidates file: {e}")
 
     if candidate_count == 0:
         os.unlink(tmp_path)
-        raise HTTPException(400, "Candidates file is empty")
+        raise HTTPException(400, "Candidates file appears empty")
 
     extracted_jd = jd_text or ""
     if jd_file and jd_file.filename:

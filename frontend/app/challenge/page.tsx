@@ -391,6 +391,8 @@ export default function ChallengePage() {
   const useLocalSample = !candidatesFile && useSample && hasLocalSample;
   const useLocalFull = !candidatesFile && !useSample && hasLocalFull;
   const canRun = useUpload || useLocalSample || useLocalFull;
+  const fileSizeMb = candidatesFile ? candidatesFile.size / (1024 * 1024) : 0;
+  const fileLarge = fileSizeMb > 100; // warn above 100 MB for cloud upload
 
   async function handleRun() {
     if (running || !canRun) return;
@@ -421,7 +423,13 @@ export default function ChallengePage() {
       const full = await challengeApi.getResults(id);
       setAllResults(full.results);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Ranking failed");
+      const msg = e instanceof Error ? e.message : "Ranking failed";
+      // Detect timeout specifically
+      if (msg.includes("timeout") || msg.includes("ECONNABORTED") || msg.includes("Network")) {
+        setError("TIMEOUT:" + msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setRunning(false);
     }
@@ -610,7 +618,22 @@ export default function ChallengePage() {
             </div>
 
             {candidatesFile ? (
-              <FileChip file={candidatesFile} color="#10b981" onRemove={() => setCandidatesFile(null)} />
+              <>
+                <FileChip file={candidatesFile} color="#10b981" onRemove={() => setCandidatesFile(null)} />
+                {fileLarge && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{
+                    marginTop: 8, padding: "8px 10px", borderRadius: 8,
+                    background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
+                    display: "flex", alignItems: "flex-start", gap: 7,
+                  }}>
+                    <AlertTriangle size={11} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ fontSize: 10, color: "rgba(245,158,11,0.9)", lineHeight: 1.6 }}>
+                      <strong>{fileSizeMb.toFixed(0)} MB</strong> — large files may time out on the cloud server.
+                      For best results, <strong>run the backend locally</strong> so no upload is needed.
+                    </div>
+                  </motion.div>
+                )}
+              </>
             ) : (
               <DropZone
                 onFile={setCandidatesFile}
@@ -769,10 +792,47 @@ export default function ChallengePage() {
 
           {/* Error */}
           {error && (
-            <div style={{ padding: "11px 14px", borderRadius: 10, marginBottom: 12, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.25)", display: "flex", alignItems: "center", gap: 10 }}>
-              <AlertTriangle size={14} color="#f43f5e" />
-              <span style={{ fontSize: 12, color: "#f43f5e" }}>{error}</span>
-            </div>
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+              style={{ padding: "14px 16px", borderRadius: 12, marginBottom: 12, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.25)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <AlertTriangle size={16} color="#f43f5e" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ flex: 1 }}>
+                  {error.startsWith("TIMEOUT:") ? (
+                    <>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#f43f5e", marginBottom: 4 }}>Upload timed out</div>
+                      <p style={{ fontSize: 11, color: "rgba(244,63,94,0.8)", margin: "0 0 10px", lineHeight: 1.6 }}>
+                        The file is too large to upload to the cloud server ({fileSizeMb > 0 ? `${fileSizeMb.toFixed(0)} MB` : "large file"}).
+                        Cloud tier has a request time limit.
+                      </p>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {hasLocalSample && (
+                          <button onClick={() => { setError(null); setCandidatesFile(null); setUseSample(true); }}
+                            style={{ padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer", background: "linear-gradient(135deg,#d97706,#f59e0b)", color: "white", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                            <Zap size={10} /> Try embedded sample (50 candidates)
+                          </button>
+                        )}
+                        <button onClick={() => { setError(null); setCandidatesFile(null); }}
+                          style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(244,63,94,0.3)", cursor: "pointer", background: "transparent", color: "#f43f5e", fontSize: 11, fontWeight: 600 }}>
+                          Change file
+                        </button>
+                      </div>
+                      <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "8px 0 0", lineHeight: 1.6 }}>
+                        💡 <strong>Tip:</strong> For large datasets, run the backend locally: it uses the local
+                        <code style={{ background: "rgba(255,255,255,0.06)", padding: "1px 5px", borderRadius: 4 }}>candidates.jsonl</code> without any upload.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#f43f5e", marginBottom: 4 }}>Ranking failed</div>
+                      <span style={{ fontSize: 12, color: "rgba(244,63,94,0.9)" }}>{error}</span>
+                    </>
+                  )}
+                </div>
+                <button onClick={() => setError(null)} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "rgba(244,63,94,0.15)", color: "#f43f5e", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <X size={10} />
+                </button>
+              </div>
+            </motion.div>
           )}
 
           {/* Complete banner */}
