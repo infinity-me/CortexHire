@@ -338,6 +338,9 @@ export const challengeApi = {
       engagement_score: number; total_score: number; reasoning: string;
     }>;
     is_sample: boolean;
+    jd_title?: string | null;
+    jd_provided?: boolean;
+    uploaded_filename?: string | null;
   }> => {
     const res = await api.get(`/api/challenge/status/${runId}`);
     return res.data;
