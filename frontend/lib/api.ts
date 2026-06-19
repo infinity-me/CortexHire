@@ -378,6 +378,39 @@ export const challengeApi = {
     }
     throw new Error('Challenge ranking timed out');
   },
+
+  getHistory: async (): Promise<{
+    runs: Array<{
+      run_id: string;
+      status: string;
+      uploaded_filename: string;
+      total_candidates: number;
+      processed: number;
+      honeypots_detected: number;
+      elapsed_seconds: number | null;
+      started_at: string;
+      completed_at: string | null;
+      jd_title: string | null;
+      jd_provided: boolean;
+      is_sample: boolean;
+      ranked_count: number;
+      top_5: Array<{ rank: number; candidate_id: string; score: number; name: string; title: string }>;
+      error: string | null;
+    }>;
+  }> => {
+    const res = await api.get('/api/challenge/history');
+    return res.data;
+  },
+
+  downloadHistory: (runId: string) => {
+    const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    window.open(`${BASE}/api/challenge/history/${runId}/download`, '_blank');
+  },
+
+  deleteHistory: async (runId: string): Promise<{ deleted: string[]; run_id: string }> => {
+    const res = await api.delete(`/api/challenge/history/${runId}`);
+    return res.data;
+  },
 };
 
 export default api;

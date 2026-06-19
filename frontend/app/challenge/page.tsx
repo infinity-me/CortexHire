@@ -15,6 +15,178 @@ type DatasetInfo = Awaited<ReturnType<typeof challengeApi.getInfo>>;
 type RunStatus = Awaited<ReturnType<typeof challengeApi.getStatus>>;
 type RankedItem = RunStatus["top_10_preview"][0];
 type JDProfile = Awaited<ReturnType<typeof challengeApi.parseJd>>;
+type HistoryRun = Awaited<ReturnType<typeof challengeApi.getHistory>>["runs"][0];
+
+// ── History Tab ────────────────────────────────────────────────────────────────
+function HistoryTab() {
+  const [runs, setRuns] = useState<HistoryRun[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await challengeApi.getHistory();
+      setRuns(d.runs);
+    } catch {
+      setRuns([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleDelete(runId: string) {
+    if (!confirm("Delete this ranking run from history?")) return;
+    setDeleting(runId);
+    try {
+      await challengeApi.deleteHistory(runId);
+      setRuns(prev => prev.filter(r => r.run_id !== runId));
+    } catch (e) {
+      alert("Could not delete: " + (e instanceof Error ? e.message : "unknown error"));
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  function fmtDate(iso: string | null) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) +
+      " " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  if (loading) return (
+    <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-muted)" }}>
+      <Loader2 size={28} style={{ animation: "spin 0.8s linear infinite", marginBottom: 12 }} />
+      <div style={{ fontSize: 13 }}>Loading history...</div>
+    </div>
+  );
+
+  if (runs.length === 0) return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: "center", padding: "60px 40px" }}>
+      <Database size={44} color="rgba(100,116,139,0.4)" style={{ marginBottom: 14 }} />
+      <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8 }}>No ranking history yet</div>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 300, margin: "0 auto" }}>
+        Run your first ranking on the <strong style={{ color: "#f59e0b" }}>Rank</strong> tab.
+        Completed runs will be saved here automatically.
+      </p>
+    </motion.div>
+  );
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Clock size={14} color="#f59e0b" />
+          <span style={{ fontSize: 13, fontWeight: 700 }}>{runs.length} Saved Ranking{runs.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button onClick={load} style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid var(--border-subtle)", background: "var(--bg-elevated)", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+          <Activity size={11} /> Refresh
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {runs.map((run, idx) => {
+          const isOk = run.status === "complete";
+          const isFailed = run.status === "failed";
+          const statusColor = isOk ? "#10b981" : isFailed ? "#f43f5e" : "#f59e0b";
+          const statusBg = isOk ? "rgba(16,185,129,0.08)" : isFailed ? "rgba(244,63,94,0.08)" : "rgba(245,158,11,0.08)";
+          const statusBorder = isOk ? "rgba(16,185,129,0.25)" : isFailed ? "rgba(244,63,94,0.25)" : "rgba(245,158,11,0.25)";
+
+          return (
+            <motion.div key={run.run_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+              style={{ padding: "16px 18px", borderRadius: 12, background: statusBg, border: `1px solid ${statusBorder}` }}>
+
+              {/* Top row */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>
+                      {run.uploaded_filename || "Server dataset"}
+                    </span>
+                    <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 20, background: `${statusColor}20`, border: `1px solid ${statusColor}40`, color: statusColor, fontWeight: 700, textTransform: "uppercase" }}>
+                      {run.status}
+                    </span>
+                    {run.is_sample && <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 20, background: "rgba(6,182,212,0.12)", border: "1px solid rgba(6,182,212,0.2)", color: "#06b6d4", fontWeight: 700 }}>SAMPLE</span>}
+                    {run.jd_provided && <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 20, background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)", color: "#a78bfa", fontWeight: 700 }}>CUSTOM JD</span>}
+                  </div>
+                  {run.jd_title && (
+                    <div style={{ fontSize: 10, color: "#a78bfa", marginBottom: 2 }}>JD: {run.jd_title}</div>
+                  )}
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{fmtDate(run.completed_at || run.started_at)}</div>
+                </div>
+
+                {/* Stats */}
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {[
+                    { label: "Ranked", val: run.ranked_count, color: "#f59e0b" },
+                    { label: "Analyzed", val: run.processed.toLocaleString(), color: "#a78bfa" },
+                    { label: "Time", val: run.elapsed_seconds ? `${run.elapsed_seconds.toFixed(0)}s` : "—", color: "#06b6d4" },
+                  ].map(s => (
+                    <div key={s.label} style={{ textAlign: "center", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, fontFamily: "'Space Grotesk',sans-serif", color: s.color }}>{s.val}</div>
+                      <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top-5 mini table */}
+              {run.top_5 && run.top_5.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Top {run.top_5.length} candidates</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {run.top_5.map(c => (
+                      <div key={c.candidate_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#f59e0b", flexShrink: 0 }}>#{c.rank}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || c.candidate_id}</div>
+                          <div style={{ fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800, fontFamily: "'Space Grotesk',sans-serif", color: c.score >= 0.7 ? "#10b981" : c.score >= 0.45 ? "#f59e0b" : "#f43f5e", flexShrink: 0 }}>
+                          {(c.score * 100).toFixed(1)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {run.error && (
+                <div style={{ padding: "7px 10px", borderRadius: 7, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.2)", fontSize: 11, color: "#f43f5e", marginBottom: 10 }}>
+                  Error: {run.error}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8 }}>
+                {isOk && (
+                  <button onClick={() => challengeApi.downloadHistory(run.run_id)} style={{
+                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    padding: "8px 12px", borderRadius: 8, cursor: "pointer",
+                    background: "linear-gradient(135deg,#059669,#10b981)", border: "none",
+                    color: "white", fontSize: 11, fontWeight: 700, boxShadow: "0 2px 10px rgba(16,185,129,0.25)",
+                  }}>
+                    <Download size={11} /> Download CSV
+                  </button>
+                )}
+                <button onClick={() => handleDelete(run.run_id)} disabled={deleting === run.run_id} style={{
+                  padding: "8px 12px", borderRadius: 8, cursor: "pointer",
+                  background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.2)",
+                  color: "#f43f5e", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 5,
+                }}>
+                  {deleting === run.run_id ? <Loader2 size={11} style={{ animation: "spin 0.8s linear infinite" }} /> : <X size={11} />} Delete
+                </button>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
 
 // ── Score Bar ──────────────────────────────────────────────────────────────────
 function ScoreBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
@@ -189,6 +361,7 @@ export default function ChallengePage() {
   const [allResults, setAllResults] = useState<RankedItem[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [activeTab, setActiveTab] = useState<"rank" | "history">("rank");
 
   useEffect(() => {
     challengeApi.getInfo().then(d => { setInfo(d); setInfoLoading(false); }).catch(() => setInfoLoading(false));
@@ -262,8 +435,8 @@ export default function ChallengePage() {
   return (
     <div style={{ maxWidth: 1100 }}>
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: "linear-gradient(135deg,rgba(245,158,11,0.2),rgba(251,191,36,0.1))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 20px rgba(245,158,11,0.2)" }}>
             <Trophy size={22} color="#f59e0b" />
           </div>
@@ -272,9 +445,29 @@ export default function ChallengePage() {
             <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Upload any JD + candidates · Genuine multi-dimensional ranking · No keyword stuffing</p>
           </div>
         </div>
+
+        {/* Tab switcher */}
+        <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 4, width: "fit-content", border: "1px solid var(--border-subtle)" }}>
+          {([
+            { id: "rank", label: "⚡ Rank", hint: "Run ranking" },
+            { id: "history", label: "📋 History", hint: "Past runs" },
+          ] as const).map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              padding: "7px 18px", borderRadius: 7, border: "none", cursor: "pointer",
+              background: activeTab === tab.id ? "linear-gradient(135deg,#d97706,#f59e0b)" : "transparent",
+              color: activeTab === tab.id ? "white" : "var(--text-muted)",
+              fontSize: 12, fontWeight: 700, transition: "all 0.2s",
+              boxShadow: activeTab === tab.id ? "0 2px 10px rgba(245,158,11,0.3)" : "none",
+            }}>{tab.label}</button>
+          ))}
+        </div>
       </motion.div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18, alignItems: "start" }}>
+      {/* Main content — Rank tab or History tab */}
+      {activeTab === "history" ? (
+        <HistoryTab />
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18, alignItems: "start" }}>
 
         {/* ── LEFT PANEL ─────────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -669,7 +862,8 @@ export default function ChallengePage() {
             </motion.div>
           )}
         </div>
-      </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
