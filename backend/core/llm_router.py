@@ -54,6 +54,43 @@ def _get_openai_client():
     return _openai_client
 
 
+async def _ollama_chat(
+    messages: list[dict],
+    temperature: float,
+    max_tokens: int,
+    json_mode: bool,
+) -> str:
+    """Call local Ollama REST API. No API key needed."""
+    import asyncio
+    import json as _json
+    import urllib.request
+
+    payload = {
+        "model": settings.ollama_model,
+        "messages": messages,
+        "stream": False,
+        "options": {"temperature": temperature, "num_predict": max_tokens},
+    }
+    if json_mode:
+        payload["format"] = "json"
+
+    data = _json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        f"{settings.ollama_host}/api/chat",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    loop = asyncio.get_event_loop()
+
+    def _call():
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            result = _json.loads(resp.read().decode("utf-8"))
+            return result.get("message", {}).get("content", "")
+
+    return await loop.run_in_executor(None, _call)
+
+
 # ─── Main Chat Completion ────────────────────────────────────
 
 async def llm_chat(
@@ -85,7 +122,18 @@ async def llm_chat(
         try:
             return await _openai_chat(messages, temperature, max_tokens, json_mode)
         except Exception as e:
-            logger.warning(f"[{task_name}] OpenAI failed: {e}. Using mock.")
+            logger.warning(f"[{task_name}] OpenAI failed: {e}. Trying Ollama...")
+            try:
+                return await _ollama_chat(messages, temperature, max_tokens, json_mode)
+            except Exception as e2:
+                logger.warning(f"[{task_name}] Ollama failed: {e2}. Using mock.")
+            return _mock_response(task_name, messages)
+
+    elif provider == "ollama":
+        try:
+            return await _ollama_chat(messages, temperature, max_tokens, json_mode)
+        except Exception as e:
+            logger.warning(f"[{task_name}] Ollama failed: {e}. Using mock.")
             return _mock_response(task_name, messages)
 
     else:

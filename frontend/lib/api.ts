@@ -249,5 +249,82 @@ export const interviewApi = {
   },
 };
 
+// ─── Challenge ────────────────────────────────────────────────
+
+export const challengeApi = {
+  getInfo: async (): Promise<{
+    full_dataset: { path: string; size_mb: number; estimated_candidates: number; available: boolean } | null;
+    sample_dataset: { path: string; candidate_count: number; available: boolean } | null;
+    job_description_summary: {
+      title: string; company: string; experience: string;
+      must_have: string[]; disqualifiers: string[]; key_behavioral_signals: string[];
+    };
+    scoring_info: { skills_weight: string; career_weight: string; behavioral_weight: string; engagement_weight: string };
+  }> => {
+    const res = await api.get('/api/challenge/info');
+    return res.data;
+  },
+
+  run: async (useSample = false, sampleLimit = 0): Promise<{
+    run_id: string; status: string; file: string; is_sample: boolean; message: string;
+  }> => {
+    const res = await api.post(
+      `/api/challenge/run?use_sample=${useSample}&sample_limit=${sampleLimit}`,
+      {},
+      { timeout: 30000 }
+    );
+    return res.data;
+  },
+
+  getStatus: async (runId: string): Promise<{
+    run_id: string; status: string; total_candidates: number; processed: number;
+    honeypots_detected: number; started_at: string; completed_at: string | null;
+    elapsed_seconds: number | null; error: string | null;
+    top_10_preview: Array<{
+      rank: number; candidate_id: string; score: number; title: string; name: string;
+      skills_score: number; career_score: number; behavioral_score: number;
+      engagement_score: number; total_score: number; reasoning: string;
+    }>;
+    is_sample: boolean;
+  }> => {
+    const res = await api.get(`/api/challenge/status/${runId}`);
+    return res.data;
+  },
+
+  getResults: async (runId: string): Promise<{
+    run_id: string; status: string; results: Array<{
+      rank: number; candidate_id: string; score: number; title: string; name: string;
+      skills_score: number; career_score: number; behavioral_score: number;
+      engagement_score: number; total_score: number; reasoning: string;
+    }>;
+    total_candidates: number; honeypots_detected: number;
+  }> => {
+    const res = await api.get(`/api/challenge/results/${runId}`);
+    return res.data;
+  },
+
+  download: (runId: string) => {
+    const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    window.open(`${BASE}/api/challenge/download/${runId}`, '_blank');
+  },
+
+  pollStatus: async (
+    runId: string,
+    onProgress?: (processed: number, total: number, honeypots: number, status: string) => void,
+    maxWait = 600000
+  ) => {
+    const start = Date.now();
+    while (Date.now() - start < maxWait) {
+      const s = await challengeApi.getStatus(runId);
+      onProgress?.(s.processed, s.total_candidates, s.honeypots_detected, s.status);
+      if (s.status === 'complete') return s;
+      if (s.status === 'failed') throw new Error(s.error || 'Challenge ranking failed');
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    throw new Error('Challenge ranking timed out');
+  },
+};
+
 export default api;
+
 

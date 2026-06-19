@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-1.5-flash"
     embedding_model: str = "text-embedding-3-small"
 
+    # Ollama — local LLM fallback (no API key needed)
+    ollama_host: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
+    ollama_enabled: bool = True  # auto-detect on startup
+
     # Database — SQLite by default (no Docker needed)
     database_url: str = "sqlite+aiosqlite:///./cortexhire.db"
     use_sqlite: bool = True
@@ -70,6 +75,14 @@ class Settings(BaseSettings):
             return "openai"
         if self.llm_fallback == "openai" and self.openai_api_key and self.openai_api_key != "your_openai_api_key_here":
             return "openai"
+        # Try Ollama local LLM before falling back to mock
+        if self.ollama_enabled:
+            try:
+                import urllib.request
+                urllib.request.urlopen(f"{self.ollama_host}/api/tags", timeout=1)
+                return "ollama"
+            except Exception:
+                pass
         return "mock"
 
     @property

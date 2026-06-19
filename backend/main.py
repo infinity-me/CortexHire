@@ -17,6 +17,7 @@ from api.routes_candidates import router as candidates_router
 from api.routes_ranking import router as ranking_router
 from api.routes_copilot import router as copilot_router
 from api.routes_interview import router as interview_router
+from api.routes_challenge import router as challenge_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -354,6 +355,7 @@ app.include_router(candidates_router)
 app.include_router(ranking_router)
 app.include_router(copilot_router)
 app.include_router(interview_router)
+app.include_router(challenge_router)
 
 
 @app.get("/")

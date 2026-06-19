@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Briefcase, Users, TrendingUp,
-  Bot, Video, X,
+  Bot, Video, X, Trophy,
 } from "lucide-react";
 
 const NAV = [
@@ -109,6 +109,28 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
               </Link>
             );
           })}
+
+          {/* Challenge section */}
+          <div style={{ margin: "20px 0 6px", padding: "0 8px" }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Hackathon
+            </span>
+          </div>
+          <Link
+            href="/challenge"
+            className={`sidebar-link ${pathname === "/challenge" ? "active" : ""}`}
+            onClick={onClose}
+            style={{
+              background: pathname === "/challenge"
+                ? "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,191,36,0.1))"
+                : "linear-gradient(135deg, rgba(245,158,11,0.08), rgba(251,191,36,0.04))",
+              border: "1px solid rgba(245,158,11,0.3)",
+              color: pathname === "/challenge" ? "#f59e0b" : "#fbbf24",
+            }}
+          >
+            <Trophy size={16} />
+            Challenge Ranker
+          </Link>
 
           <div style={{ margin: "20px 0 6px", padding: "0 8px" }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>

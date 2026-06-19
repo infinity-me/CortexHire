@@ -65,3 +65,8 @@ CortexHire_Hackathon_Deck.pptx
 CortexHire_Technical_Evaluation.pptx
 make_pptx.py
 make_eval_pptx.py
+
+# ─── Challenge Submission Outputs (generated, not source) ────
+submission.csv
+submission_*.csv
+submission_test.csv
