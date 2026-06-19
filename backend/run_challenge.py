@@ -23,11 +23,13 @@ import json
 import logging
 import math
 import os
+import re
 import sys
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -106,6 +108,253 @@ CV_SPEECH_ONLY = {
 _NOW = datetime(2026, 6, 19, tzinfo=timezone.utc)
 
 
+# ── JD Profile (dynamic — built from uploaded JD text) ────────────────────────
+
+@dataclass
+class JDProfile:
+    """Scoring parameters extracted from a job description."""
+    title: str = "Senior AI Engineer"
+    company: str = ""
+    # Skills
+    core_skills: set = field(default_factory=lambda: set(CORE_AI_SKILLS))
+    secondary_skills: set = field(default_factory=lambda: set(SECONDARY_AI_SKILLS))
+    penalised_domains: set = field(default_factory=lambda: set(CV_SPEECH_ONLY))
+    neg_title_keywords: set = field(default_factory=lambda: set(NEGATIVE_TITLE_KEYWORDS))
+    # Experience range
+    exp_ideal_min: float = 6.0
+    exp_ideal_max: float = 8.0
+    exp_good_min: float = 5.0
+    exp_good_max: float = 9.0
+    exp_ok_min: float = 4.0
+    exp_ok_max: float = 12.0
+    # Seniority
+    senior_keywords: set = field(default_factory=lambda: {
+        "senior", "lead", "staff", "principal", "head", "director",
+        "architect", "manager", "vp", "founder", "cto", "chief"
+    })
+    # Location (informational only — no hard scoring)
+    locations: list = field(default_factory=list)
+    # Raw summary for display
+    parsed_summary: str = ""
+    required_skills_preview: list = field(default_factory=list)
+    disqualifiers_preview: list = field(default_factory=list)
+
+
+# Broad tech vocabulary used when parsing any JD text
+_ALL_TECH_VOCAB: dict[str, str] = {
+    # key = keyword to search, value = category ("core" or "secondary")
+    # Embeddings & Retrieval
+    "embeddings": "core", "sentence-transformers": "core", "sentence transformers": "core",
+    "bge": "core", "e5": "core", "text-embedding": "core",
+    # Vector DBs
+    "qdrant": "core", "pinecone": "core", "weaviate": "core", "milvus": "core",
+    "faiss": "core", "elasticsearch": "core", "opensearch": "core", "chromadb": "core",
+    "chroma": "core", "pgvector": "core", "redis vector": "core", "vespa": "core",
+    "vector search": "core", "vector database": "core", "hybrid search": "core",
+    "ann": "core", "approximate nearest neighbour": "core",
+    # NLP / IR
+    "nlp": "core", "natural language processing": "core",
+    "information retrieval": "core", "semantic search": "core",
+    "dense retrieval": "core", "sparse retrieval": "core",
+    "bm25": "core", "tf-idf": "core", "tfidf": "core", "full-text search": "core",
+    # LLM / GenAI
+    "llm": "core", "large language model": "core", "gpt": "core",
+    "claude": "core", "gemini": "core", "llama": "core", "mistral": "core",
+    "rag": "core", "retrieval augmented": "core",
+    "langchain": "core", "llamaindex": "core", "llama index": "core",
+    "fine-tuning": "core", "fine tuning": "core", "finetuning": "core",
+    "lora": "core", "qlora": "core", "peft": "core", "rlhf": "core", "dpo": "core",
+    # Ranking / RecSys
+    "ranking": "core", "learning to rank": "core", "ltr": "core",
+    "reranking": "core", "reranker": "core", "cross-encoder": "core",
+    "recommendation system": "core", "recommender": "core",
+    "collaborative filtering": "core", "matrix factorization": "core",
+    "ndcg": "core", "mrr": "core", "map@k": "core",
+    # ML / DL Frameworks
+    "pytorch": "core", "tensorflow": "core", "jax": "core",
+    "huggingface": "core", "transformers": "core",
+    "scikit-learn": "secondary", "sklearn": "secondary",
+    "xgboost": "secondary", "lightgbm": "secondary", "catboost": "secondary",
+    # ML Production
+    "mlops": "core", "ml pipeline": "core", "model serving": "core",
+    "triton": "secondary", "feature store": "secondary", "model deployment": "secondary",
+    # Core Languages
+    "python": "core", "golang": "secondary", "rust": "secondary", "scala": "secondary",
+    "java": "secondary", "typescript": "secondary", "javascript": "secondary",
+    # Data Engineering
+    "kafka": "secondary", "spark": "secondary", "airflow": "secondary",
+    "dbt": "secondary", "data pipeline": "secondary", "distributed systems": "secondary",
+    # Cloud / Infra
+    "kubernetes": "secondary", "docker": "secondary",
+    "aws": "secondary", "gcp": "secondary", "azure": "secondary",
+    # Web / API
+    "fastapi": "secondary", "flask": "secondary", "rest api": "secondary",
+    # General ML
+    "machine learning": "secondary", "deep learning": "secondary",
+    "neural network": "secondary", "bert": "secondary",
+    "data science": "secondary", "statistics": "secondary",
+    "sql": "secondary", "nosql": "secondary",
+    # CV / Speech (penalised for AI-text roles)
+    "computer vision": "penalised", "object detection": "penalised",
+    "image classification": "penalised", "cnn": "penalised",
+    "speech recognition": "penalised", "text to speech": "penalised",
+    "audio processing": "penalised", "robotics": "penalised",
+    # Open source signals
+    "open source": "core", "github": "secondary", "research paper": "secondary",
+    "numpy": "secondary", "pandas": "secondary",
+}
+
+_DEFAULT_DISQUALIFIER_TITLES = [
+    "marketing", "sales", "human resources", "accountant", "finance",
+    "civil engineer", "mechanical engineer", "graphic designer",
+    "content writer", "customer support", "operations manager",
+    "supply chain", "logistics", "real estate", "teacher", "nurse",
+    "business analyst", "project manager", "business development",
+    "product manager", "scrum master", "ui designer", "ux designer",
+    "digital marketer", "seo specialist", "social media",
+]
+
+
+def build_jd_profile(jd_text: str) -> JDProfile:
+    """
+    Parse raw JD text (from .txt/.docx/.md) into a JDProfile that
+    drives dynamic, JD-specific candidate scoring.
+    Works entirely offline — no LLM required.
+    """
+    if not jd_text or len(jd_text.strip()) < 30:
+        return JDProfile()  # fall back to defaults
+
+    text = jd_text.lower()
+
+    # ── 1. Extract experience range ──────────────────────────────────────────
+    # Patterns: "5-9 years", "5 to 9 years", "minimum 5 years", "5+ years"
+    range_matches = re.findall(r'(\d+)\s*[-–to]+\s*(\d+)\s*year', text)
+    min_matches = re.findall(r'(?:minimum|at least|min(?:imum)?)\s*(\d+)\s*year', text)
+    plus_matches = re.findall(r'(\d+)\+\s*year', text)
+
+    exp_ideal_min, exp_ideal_max = 5.0, 9.0
+    exp_good_min, exp_good_max = 4.0, 11.0
+    exp_ok_min, exp_ok_max = 3.0, 15.0
+
+    if range_matches:
+        vals = [(int(a), int(b)) for a, b in range_matches if int(a) < int(b)]
+        if vals:
+            exp_ideal_min = min(v[0] for v in vals)
+            exp_ideal_max = max(v[1] for v in vals)
+            exp_good_min = max(0, exp_ideal_min - 1)
+            exp_good_max = exp_ideal_max + 2
+            exp_ok_min = max(0, exp_ideal_min - 2)
+            exp_ok_max = exp_ideal_max + 4
+    elif min_matches:
+        mn = int(min_matches[0])
+        exp_ideal_min = mn
+        exp_ideal_max = mn + 5
+        exp_good_min = max(0, mn - 1)
+        exp_good_max = mn + 8
+    elif plus_matches:
+        mn = int(plus_matches[0])
+        exp_ideal_min = mn
+        exp_ideal_max = mn + 6
+        exp_good_min = max(0, mn - 1)
+        exp_good_max = mn + 8
+
+    # ── 2. Extract skills from JD text ──────────────────────────────────────
+    # Split into "required" vs "nice-to-have" sections if possible
+    required_marker = re.search(
+        r'(?:must.have|required|mandatory|essential|you.will.need|minimum qualification)',
+        text
+    )
+    nice_marker = re.search(
+        r'(?:nice.to.have|bonus|preferred|plus|advantage|good.to.have)',
+        text
+    )
+
+    req_text = text
+    nice_text = ""
+    if required_marker and nice_marker and required_marker.start() < nice_marker.start():
+        req_text = text[required_marker.start():nice_marker.start()]
+        nice_text = text[nice_marker.start():]
+
+    core_skills: set[str] = set()
+    secondary_skills: set[str] = set()
+    penalised: set[str] = set()
+
+    for kw, category in _ALL_TECH_VOCAB.items():
+        in_req = kw in req_text
+        in_nice = kw in nice_text
+
+        if category == "penalised":
+            if in_req or in_nice:
+                penalised.add(kw)
+        elif category == "core":
+            if in_req:
+                core_skills.add(kw)
+            elif in_nice or kw in text:  # mentioned anywhere → at least secondary
+                secondary_skills.add(kw)
+        else:  # secondary
+            if in_req:
+                secondary_skills.add(kw)
+            elif in_nice or kw in text:
+                secondary_skills.add(kw)
+
+    # Ensure python is always core if mentioned anywhere (it's in every tech JD)
+    if "python" in text:
+        core_skills.add("python")
+
+    # Fall back to default constants if JD is very sparse
+    if len(core_skills) < 3:
+        core_skills = set(CORE_AI_SKILLS)
+        secondary_skills = set(SECONDARY_AI_SKILLS)
+
+    # ── 3. Detect seniority level ────────────────────────────────────────────
+    senior_kws = {"senior", "lead", "staff", "principal", "head", "director",
+                  "architect", "vp", "founder", "cto", "chief"}
+    if any(k in text for k in ["junior", "entry level", "associate engineer", "fresher"]):
+        senior_kws = {"junior", "associate", "entry"}
+    elif any(k in text for k in ["manager", "director", "vp ", "head of"]):
+        senior_kws.update({"manager", "director", "vp", "head"})
+
+    # ── 4. Detect disqualifiers ──────────────────────────────────────────────
+    # Start from defaults; keep them — JD-specific disqualifiers are hard to infer
+    neg_titles = set(_DEFAULT_DISQUALIFIER_TITLES)
+
+    # ── 5. Extract location ──────────────────────────────────────────────────
+    loc_re = r'\b(bangalore|bengaluru|mumbai|delhi|ncr|pune|hyderabad|chennai|noida|gurgaon|gurugram|kolkata|ahmedabad|remote)\b'
+    locations = list(dict.fromkeys(re.findall(loc_re, text)))  # deduplicated
+
+    # ── 6. Extract role title ────────────────────────────────────────────────
+    title_line = jd_text.strip().splitlines()[0][:80]
+
+    # ── 7. Build preview lists for UI display ───────────────────────────────
+    req_preview = sorted(core_skills)[:10]
+    disq_preview = sorted(neg_titles)[:6]
+
+    exp_str = f"{int(exp_ideal_min)}–{int(exp_ideal_max)} years"
+    skills_preview = ", ".join(sorted(core_skills)[:6])
+    parsed_summary = f"Experience: {exp_str} | Skills detected: {len(core_skills)} core, {len(secondary_skills)} secondary"
+    if locations:
+        parsed_summary += f" | Location: {', '.join(locations[:3])}"
+
+    return JDProfile(
+        title=title_line,
+        core_skills=core_skills,
+        secondary_skills=secondary_skills,
+        penalised_domains=penalised if penalised else set(CV_SPEECH_ONLY),
+        neg_title_keywords=neg_titles,
+        exp_ideal_min=exp_ideal_min,
+        exp_ideal_max=exp_ideal_max,
+        exp_good_min=exp_good_min,
+        exp_good_max=exp_good_max,
+        exp_ok_min=exp_ok_min,
+        exp_ok_max=exp_ok_max,
+        senior_keywords=senior_kws,
+        locations=locations,
+        parsed_summary=parsed_summary,
+        required_skills_preview=req_preview,
+        disqualifiers_preview=disq_preview,
+    )
+
+
 # ── Candidate Streaming ────────────────────────────────────────────────────────
 
 def stream_candidates(file_path: str, limit: int = 0) -> Iterator[dict]:
@@ -175,23 +424,33 @@ def is_honeypot(candidate: dict) -> bool:
 
 # ── Skills Scoring ─────────────────────────────────────────────────────────────
 
-def score_skills(candidate: dict) -> tuple[float, list[str]]:
+def score_skills(
+    candidate: dict,
+    jd_profile: Optional[JDProfile] = None,
+) -> tuple[float, list[str]]:
     """
-    Score 0–40 based on skill alignment with the AI Engineer JD.
+    Score 0–40 based on skill alignment with the JD.
+    Uses JDProfile if provided, otherwise falls back to hardcoded Redrob JD constants.
     Returns (score, matched_skills_list).
     """
     skills = candidate.get("skills", [])
     if not skills:
         return 0.0, []
 
+    p = jd_profile
+    core_kws = p.core_skills if p else CORE_AI_SKILLS
+    secondary_kws = p.secondary_skills if p else SECONDARY_AI_SKILLS
+    penalised_kws = p.penalised_domains if p else CV_SPEECH_ONLY
+    neg_title_kws = p.neg_title_keywords if p else NEGATIVE_TITLE_KEYWORDS
+
     redrob = candidate.get("redrob_signals", {})
     assessment_scores = redrob.get("skill_assessment_scores", {})
 
     level_weight = {"expert": 1.0, "advanced": 0.75, "intermediate": 0.5, "beginner": 0.25}
 
-    core_matches = []
-    secondary_matches = []
-    cv_speech_penalty = 0
+    core_matches: list[tuple[str, float]] = []
+    secondary_matches: list[tuple[str, float]] = []
+    penalised_count = 0
 
     for skill in skills:
         name = (skill.get("name") or "").lower().strip()
@@ -200,54 +459,44 @@ def score_skills(candidate: dict) -> tuple[float, list[str]]:
         duration_months = skill.get("duration_months", 12)
         endorsements = skill.get("endorsements", 0)
 
-        # Duration bonus (more years = more credible)
         duration_bonus = min(0.3, duration_months / 120)
         endorsement_bonus = min(0.2, endorsements / 100)
-
         effective_weight = weight + duration_bonus + endorsement_bonus
 
-        # Check core AI skills
         matched_core = False
-        for keyword in CORE_AI_SKILLS:
+        for keyword in core_kws:
             if keyword in name or name in keyword:
                 core_matches.append((keyword, effective_weight))
                 matched_core = True
                 break
 
-        # Check secondary skills
         if not matched_core:
-            for keyword in SECONDARY_AI_SKILLS:
+            for keyword in secondary_kws:
                 if keyword in name or name in keyword:
                     secondary_matches.append((keyword, effective_weight * 0.4))
                     break
 
-        # CV/Speech penalty
-        for keyword in CV_SPEECH_ONLY:
+        for keyword in penalised_kws:
             if keyword in name:
-                cv_speech_penalty += 0.1
+                penalised_count += 1
                 break
 
-    # Assessment score bonus
     assessment_bonus = 0.0
     if assessment_scores:
         avg = sum(assessment_scores.values()) / len(assessment_scores)
-        assessment_bonus = (avg / 100) * 3.0  # up to +3 pts
+        assessment_bonus = (avg / 100) * 3.0
 
-    # Calculate raw score
     core_score = min(30.0, sum(w for _, w in core_matches[:12]) * 3.5)
     secondary_score = min(7.0, sum(w for _, w in secondary_matches[:6]) * 2.0)
     raw = core_score + secondary_score + assessment_bonus
-    raw -= cv_speech_penalty * 5.0  # penalize CV/speech-only profiles
+    raw -= penalised_count * 0.5  # gentle penalty per penalised-domain skill
 
-    # Check if current title is non-tech — heavily discount skills score
-    # (Marketing Manager with Pinecone in skills is a trap candidate)
+    # Title mismatch: heavily discount skills from wrong-domain candidates
     profile = candidate.get("profile", {})
     current_title = (profile.get("current_title") or "").lower()
-    is_wrong_domain = any(kw in current_title for kw in NEGATIVE_TITLE_KEYWORDS)
-    if is_wrong_domain:
-        raw *= 0.25  # skills don't matter if core title is wrong domain
+    if any(kw in current_title for kw in neg_title_kws):
+        raw *= 0.25
 
-    # Penalty if no core AI skills found
     if not core_matches:
         raw *= 0.2
 
@@ -257,39 +506,50 @@ def score_skills(candidate: dict) -> tuple[float, list[str]]:
 
 # ── Career Quality Scoring ─────────────────────────────────────────────────────
 
-def score_career(candidate: dict) -> tuple[float, str]:
+def score_career(
+    candidate: dict,
+    jd_profile: Optional[JDProfile] = None,
+) -> tuple[float, str]:
     """
     Score 0–30 based on career trajectory, company types, and experience range.
+    Uses JDProfile experience ranges if provided.
     Returns (score, career_reasoning).
     """
+    p = jd_profile
+    neg_title_kws = p.neg_title_keywords if p else NEGATIVE_TITLE_KEYWORDS
+    senior_kws = p.senior_keywords if p else {"senior", "lead", "staff", "principal",
+        "head", "director", "architect", "manager", "vp", "founder", "cto", "chief"}
+    ideal_min = p.exp_ideal_min if p else 6.0
+    ideal_max = p.exp_ideal_max if p else 8.0
+    good_min = p.exp_good_min if p else 5.0
+    good_max = p.exp_good_max if p else 9.0
+    ok_min = p.exp_ok_min if p else 4.0
+    ok_max = p.exp_ok_max if p else 12.0
+
     profile = candidate.get("profile", {})
     career = candidate.get("career_history", [])
 
     years_exp = profile.get("years_of_experience", 0) or 0
     current_title = (profile.get("current_title") or "").lower()
-    current_industry = (profile.get("current_industry") or "").lower()
 
     score = 0.0
     reasoning_parts = []
 
-    # 1. Experience range alignment (0–10 pts)
-    # JD: 5–9 years ideal, 6–8 sweet spot
-    if 6 <= years_exp <= 8:
+    # 1. Experience range (JD-specific thresholds)
+    if ideal_min <= years_exp <= ideal_max:
         score += 10.0
         reasoning_parts.append(f"{years_exp:.1f}yrs (ideal)")
-    elif 5 <= years_exp <= 9:
+    elif good_min <= years_exp <= good_max:
         score += 8.0
         reasoning_parts.append(f"{years_exp:.1f}yrs (good range)")
-    elif 4 <= years_exp < 5 or 9 < years_exp <= 12:
+    elif ok_min <= years_exp <= ok_max:
         score += 5.0
         reasoning_parts.append(f"{years_exp:.1f}yrs (acceptable)")
-    elif 3 <= years_exp < 4:
-        score += 2.0
-        reasoning_parts.append(f"{years_exp:.1f}yrs (junior)")
-    else:
+    elif years_exp > 0:
+        score += 1.0
         reasoning_parts.append(f"{years_exp:.1f}yrs (out of range)")
 
-    # 2. Consulting firm penalty (–15 if ALL career is consulting)
+    # 2. Consulting firm penalty
     if career:
         consulting_count = sum(
             1 for r in career
@@ -299,28 +559,23 @@ def score_career(candidate: dict) -> tuple[float, str]:
             score -= 15.0
             reasoning_parts.append("consulting-only career")
         elif consulting_count > 0:
-            consulting_ratio = consulting_count / len(career)
-            score -= consulting_ratio * 6.0  # partial penalty
+            score -= (consulting_count / len(career)) * 6.0
 
-    # 3. Negative title signals (-18 pts for clearly wrong domain — strong penalty)
-    neg_hit = any(kw in current_title for kw in NEGATIVE_TITLE_KEYWORDS)
-    if neg_hit:
+    # 3. Wrong-domain title penalty
+    if any(kw in current_title for kw in neg_title_kws):
         score -= 18.0
         reasoning_parts.append(f"wrong-domain title: {profile.get('current_title')}")
 
-    # 4. Senior role trajectory (0–8 pts)
-    senior_keywords = {"senior", "lead", "staff", "principal", "head", "director",
-                       "architect", "manager", "vp", "founder", "cto", "chief"}
+    # 4. Senior role trajectory
     senior_count = sum(
         1 for r in career
-        if any(kw in (r.get("title") or "").lower() for kw in senior_keywords)
+        if any(kw in (r.get("title") or "").lower() for kw in senior_kws)
     )
     score += min(8.0, senior_count * 2.5)
     if senior_count > 0:
         reasoning_parts.append(f"{senior_count} senior roles")
 
-    # 5. Product company experience (0–8 pts)
-    # Detect non-consulting industry signals
+    # 5. Product company experience
     product_industries = {"software", "saas", "fintech", "ai", "ml", "tech",
                           "startup", "product", "platform", "marketplace"}
     product_count = sum(
@@ -330,14 +585,12 @@ def score_career(candidate: dict) -> tuple[float, str]:
     )
     score += min(8.0, product_count * 2.5)
 
-    # 6. Title-chaser detection (avg tenure < 18 months across 3+ jobs = penalty)
+    # 6. Title-chaser detection
     if len(career) >= 3:
         durations = [r.get("duration_months", 0) for r in career if not r.get("is_current")]
-        if durations:
-            avg_tenure = sum(durations) / len(durations)
-            if avg_tenure < 18:
-                score -= 5.0
-                reasoning_parts.append("short avg tenure (<18mo)")
+        if durations and (sum(durations) / len(durations)) < 18:
+            score -= 5.0
+            reasoning_parts.append("short avg tenure (<18mo)")
 
     reasoning = ", ".join(reasoning_parts) if reasoning_parts else "standard career"
     return round(min(30.0, max(0.0, score)), 2), reasoning
@@ -496,21 +749,23 @@ def generate_reasoning(
 
 # ── Main Scoring Pipeline ──────────────────────────────────────────────────────
 
-def score_candidate(candidate: dict) -> dict | None:
-    """Score a single candidate. Returns None if honeypot detected."""
+def score_candidate(
+    candidate: dict,
+    jd_profile: Optional[JDProfile] = None,
+) -> dict | None:
+    """Score a single candidate against the JD profile. Returns None if honeypot."""
     if is_honeypot(candidate):
         return None
 
     candidate_id = candidate.get("candidate_id", "UNKNOWN")
     profile = candidate.get("profile", {})
 
-    skills_score, matched_skills = score_skills(candidate)
-    career_score, career_reasoning = score_career(candidate)
+    skills_score, matched_skills = score_skills(candidate, jd_profile)
+    career_score, career_reasoning = score_career(candidate, jd_profile)
     behavioral_score, behavioral_signals = score_behavioral(candidate)
     engagement_score = score_engagement(candidate)
 
     total = skills_score + career_score + behavioral_score + engagement_score
-    # Normalize to 0–1 for the competition format
     normalized_score = round(total / 100.0, 4)
 
     reasoning = generate_reasoning(
@@ -539,7 +794,12 @@ def score_candidate(candidate: dict) -> dict | None:
     }
 
 
-def run_ranking(candidates_file: str, out_file: str, sample: int = 0) -> None:
+def run_ranking(
+    candidates_file: str,
+    out_file: str,
+    sample: int = 0,
+    jd_profile: Optional[JDProfile] = None,
+) -> None:
     """Full ranking pipeline. Outputs top-100 CSV."""
     logger.info(f"Starting ranking: {candidates_file}")
     logger.info(f"Output: {out_file}")
@@ -552,7 +812,7 @@ def run_ranking(candidates_file: str, out_file: str, sample: int = 0) -> None:
     BUFFER_SIZE = 200  # keep top 200, output top 100
 
     for candidate in stream_candidates(candidates_file, limit=sample):
-        result = score_candidate(candidate)
+        result = score_candidate(candidate, jd_profile)
         if result is None:
             honeypots_detected += 1
             total_processed += 1

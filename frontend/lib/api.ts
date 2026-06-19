@@ -265,37 +265,68 @@ export const challengeApi = {
     return res.data;
   },
 
-  run: async (useSample = false, sampleLimit = 0): Promise<{
-    run_id: string; status: string; file: string; is_sample: boolean; message: string;
+  parseJd: async (
+    fileOrText: File | string,
+  ): Promise<{
+    source: string;
+    parsed_title: string;
+    experience_range: { ideal_min: number; ideal_max: number; good_min: number; good_max: number };
+    core_skills_count: number;
+    secondary_skills_count: number;
+    required_skills_preview: string[];
+    disqualifiers_preview: string[];
+    locations: string[];
+    parsed_summary: string;
+    jd_text: string;
   }> => {
-    const res = await api.post(
-      `/api/challenge/run?use_sample=${useSample}&sample_limit=${sampleLimit}`,
-      {},
-      { timeout: 30000 }
-    );
+    const formData = new FormData();
+    if (typeof fileOrText === 'string') {
+      formData.append('jd_text', fileOrText);
+    } else {
+      formData.append('file', fileOrText);
+    }
+    const res = await api.post('/api/challenge/parse-jd', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
+    });
+    return res.data;
+  },
+
+  run: async (useSample = false, sampleLimit = 0, jdText?: string): Promise<{
+    run_id: string; status: string; file: string; is_sample: boolean;
+    jd_provided: boolean; message: string;
+  }> => {
+    const params = new URLSearchParams({ use_sample: String(useSample), sample_limit: String(sampleLimit) });
+    if (jdText) params.set('jd_text', jdText);
+    const res = await api.post(`/api/challenge/run?${params}`, {}, { timeout: 30000 });
     return res.data;
   },
 
   uploadAndRun: async (
-    file: File,
+    candidatesFile: File,
+    jdFile?: File | null,
+    jdText?: string,
     limit = 0,
     onProgress?: (percent: number) => void
   ): Promise<{
     run_id: string; status: string; filename: string;
-    candidate_count: number; is_sample: boolean; message: string;
+    candidate_count: number; is_sample: boolean; jd_provided: boolean; message: string;
   }> => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', candidatesFile);
+    if (jdFile) formData.append('jd_file', jdFile);
+    if (jdText) formData.append('jd_text', jdText);
     formData.append('limit', String(limit));
     const res = await api.post('/api/challenge/upload-and-run', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 600000, // 10 min
+      timeout: 600000,
       onUploadProgress: (e) => {
         if (e.total) onProgress?.(Math.round((e.loaded / e.total) * 100));
       },
     });
     return res.data;
   },
+
 
   getStatus: async (runId: string): Promise<{
     run_id: string; status: string; total_candidates: number; processed: number;

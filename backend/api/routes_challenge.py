@@ -1,15 +1,19 @@
 """
 CortexHire — Challenge API Routes
 
-Supports both local-file mode (development) and file-upload mode (production/Render).
+Supports:
+  - Local file mode (dev): server-side candidates.jsonl
+  - Upload mode (production/Render): upload candidates file + optional JD
+  - JD parsing: extract structured scoring profile from any JD file or text
 
 Routes:
-  GET  /api/challenge/info              — dataset status
-  POST /api/challenge/run               — run on local file (dev)
-  POST /api/challenge/upload-and-run    — upload file + run (production)
+  GET  /api/challenge/info              — dataset status + JD info
+  POST /api/challenge/parse-jd          — extract JD profile from file/text
+  POST /api/challenge/run               — run on local file (dev mode)
+  POST /api/challenge/upload-and-run    — upload candidates + optional JD (production)
   GET  /api/challenge/status/{run_id}   — poll progress
   GET  /api/challenge/download/{run_id} — download submission CSV
-  GET  /api/challenge/results/{run_id}  — full results JSON
+  GET  /api/challenge/results/{run_id}  — full ranked results JSON
 """
 from __future__ import annotations
 
@@ -27,6 +31,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/challenge", tags=["Challenge"])
@@ -34,10 +39,48 @@ router = APIRouter(prefix="/api/challenge", tags=["Challenge"])
 # ── In-memory run tracker ─────────────────────────────────────────────────────
 _runs: dict[str, dict] = {}
 
+
+# ── JD Text Extraction ────────────────────────────────────────────────────────
+
+def _extract_text_from_file(file_bytes: bytes, filename: str) -> str:
+    """Extract plain text from uploaded file (docx, txt, md, pdf)."""
+    filename_lower = (filename or "").lower()
+
+    if filename_lower.endswith(".docx"):
+        try:
+            from docx import Document
+            import io as _io
+            doc = Document(_io.BytesIO(file_bytes))
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        except Exception as e:
+            logger.warning(f"docx parse failed: {e}. Falling back to raw text.")
+            return file_bytes.decode("utf-8", errors="replace")
+
+    elif filename_lower.endswith(".pdf"):
+        try:
+            import pdfplumber
+            import io as _io
+            text_parts = []
+            with pdfplumber.open(_io.BytesIO(file_bytes)) as pdf:
+                for page in pdf.pages:
+                    text_parts.append(page.extract_text() or "")
+            return "\n".join(text_parts)
+        except Exception as e:
+            logger.warning(f"PDF parse failed: {e}. Trying raw decode.")
+            return file_bytes.decode("utf-8", errors="replace")
+
+    else:  # .txt, .md, or anything else
+        for enc in ("utf-8", "utf-16", "latin-1"):
+            try:
+                return file_bytes.decode(enc)
+            except Exception:
+                continue
+        return file_bytes.decode("utf-8", errors="replace")
+
+
 # ── Dataset path detection ────────────────────────────────────────────────────
 
 def _find_dataset() -> Optional[str]:
-    """Auto-detect candidates.jsonl — local dev only."""
     backend_dir = Path(__file__).resolve().parent.parent
     search_paths = [
         backend_dir.parent / "India_runs_data_and_ai_challenge" / "candidates.jsonl",
@@ -52,20 +95,11 @@ def _find_dataset() -> Optional[str]:
 
 
 def _find_sample() -> Optional[str]:
-    """
-    Find sample candidates JSON.
-    Priority:
-    1. backend/data/sample_challenge_candidates.json  (committed — works on Render)
-    2. India_runs_data_and_ai_challenge/sample_candidates.json (local only)
-    """
     backend_dir = Path(__file__).resolve().parent.parent
     search_paths = [
-        # Committed embedded sample (always works)
         backend_dir / "data" / "sample_challenge_candidates.json",
-        # Local challenge folder
         backend_dir.parent / "India_runs_data_and_ai_challenge" / "sample_candidates.json",
         backend_dir / "India_runs_data_and_ai_challenge" / "sample_candidates.json",
-        Path("India_runs_data_and_ai_challenge") / "sample_candidates.json",
     ]
     for p in search_paths:
         if p.exists():
@@ -73,25 +107,11 @@ def _find_sample() -> Optional[str]:
     return None
 
 
-def _count_jsonl_lines(path: str, max_count: int = 100001) -> int:
-    """Count lines in a JSONL file (capped to avoid blocking on huge files)."""
-    count = 0
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            for _ in f:
-                count += 1
-                if count >= max_count:
-                    break
-    except Exception:
-        pass
-    return count
-
-
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/info")
 async def get_challenge_info():
-    """Return info about available dataset files."""
+    """Return info about available dataset files and default JD summary."""
     dataset_path = _find_dataset()
     sample_path = _find_sample()
 
@@ -99,7 +119,7 @@ async def get_challenge_info():
         "full_dataset": None,
         "sample_dataset": None,
         "upload_supported": True,
-        "job_description_summary": _get_jd_summary(),
+        "job_description_summary": _get_default_jd_summary(),
         "scoring_info": {
             "skills_weight": "40%",
             "career_weight": "30%",
@@ -136,11 +156,10 @@ async def get_challenge_info():
     return result
 
 
-def _get_jd_summary() -> dict:
+def _get_default_jd_summary() -> dict:
     return {
         "title": "Senior AI Engineer — Founding Team",
         "company": "Redrob AI (Series A)",
-        "location": "Pune/Noida, India (Hybrid)",
         "experience": "5–9 years",
         "must_have": [
             "Embeddings-based retrieval (sentence-transformers, BGE, E5)",
@@ -154,12 +173,60 @@ def _get_jd_summary() -> dict:
             "CV/speech domains without NLP/IR exposure",
             "Title-chaser pattern (<18mo avg tenure)",
         ],
-        "key_behavioral_signals": [
-            "Active on platform (last_active_date recency)",
-            "Open to work flag",
-            "Short notice period (<30 days preferred)",
-            "High recruiter response rate",
-        ],
+        "is_default": True,
+    }
+
+
+@router.post("/parse-jd")
+async def parse_jd(
+    file: Optional[UploadFile] = File(default=None),
+    jd_text: Optional[str] = Form(default=None),
+):
+    """
+    Parse an uploaded JD file or raw JD text.
+    Returns a structured JD profile with extracted skills, experience range, etc.
+    Accepts: .docx, .txt, .md, .pdf or raw text in form body.
+    """
+    import sys
+    backend_dir = str(Path(__file__).resolve().parent.parent)
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+
+    from run_challenge import build_jd_profile
+
+    text = ""
+    source = "text"
+
+    if file and file.filename:
+        content = await file.read()
+        text = _extract_text_from_file(content, file.filename)
+        source = file.filename
+    elif jd_text:
+        text = jd_text
+    else:
+        raise HTTPException(400, "Provide either a JD file upload or jd_text form field")
+
+    if len(text.strip()) < 30:
+        raise HTTPException(400, "JD text too short to parse (minimum 30 characters)")
+
+    profile = build_jd_profile(text)
+
+    return {
+        "source": source,
+        "parsed_title": profile.title,
+        "experience_range": {
+            "ideal_min": profile.exp_ideal_min,
+            "ideal_max": profile.exp_ideal_max,
+            "good_min": profile.exp_good_min,
+            "good_max": profile.exp_good_max,
+        },
+        "core_skills_count": len(profile.core_skills),
+        "secondary_skills_count": len(profile.secondary_skills),
+        "required_skills_preview": profile.required_skills_preview,
+        "disqualifiers_preview": profile.disqualifiers_preview,
+        "locations": profile.locations,
+        "parsed_summary": profile.parsed_summary,
+        "jd_text": text[:5000],  # Return first 5000 chars so frontend can use it
     }
 
 
@@ -168,8 +235,9 @@ async def start_challenge_run(
     background_tasks: BackgroundTasks,
     use_sample: bool = False,
     sample_limit: int = 0,
+    jd_text: Optional[str] = None,
 ):
-    """Start ranking on a locally-detected file (dev mode)."""
+    """Start ranking on a server-side file (dev mode). Optionally pass jd_text."""
     if use_sample:
         file_path = _find_sample()
         if not file_path:
@@ -179,23 +247,20 @@ async def start_challenge_run(
     else:
         file_path = _find_dataset()
         if not file_path:
-            raise HTTPException(
-                404,
-                "candidates.jsonl not found on server. "
-                "Use POST /api/challenge/upload-and-run to upload your file."
-            )
+            raise HTTPException(404, "candidates.jsonl not found. Use upload-and-run.")
         is_sample = False
         limit = sample_limit
 
     run_id = _create_run(file_path, is_sample, limit)
-    background_tasks.add_task(_run_challenge_background, run_id, file_path, limit, is_sample)
-
+    background_tasks.add_task(
+        _run_challenge_background, run_id, file_path, limit, is_sample,
+        jd_text=jd_text
+    )
     return {
-        "run_id": run_id,
-        "status": "queued",
-        "file": file_path,
-        "is_sample": is_sample,
-        "message": "Ranking started. Poll /api/challenge/status/{run_id} for progress.",
+        "run_id": run_id, "status": "queued",
+        "file": file_path, "is_sample": is_sample,
+        "jd_provided": bool(jd_text),
+        "message": "Ranking started. Poll /api/challenge/status/{run_id}",
     }
 
 
@@ -203,31 +268,35 @@ async def start_challenge_run(
 async def upload_and_run(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    jd_file: Optional[UploadFile] = File(default=None),
+    jd_text: Optional[str] = Form(default=None),
     limit: int = Form(default=0),
 ):
     """
-    Accept an uploaded candidates file (JSON or JSONL) and start ranking.
-    Works in production (Render) — no local file needed.
+    Upload candidates file + optional JD file/text, then rank.
+    Works in production (Render) — no local files needed.
+
+    - file: candidates .json or .jsonl
+    - jd_file: job description .docx, .txt, .md, .pdf (optional)
+    - jd_text: raw JD text as form string (optional, used if jd_file not provided)
+    - limit: cap number of candidates (0 = all)
     """
     filename = file.filename or "candidates"
     suffix = ".jsonl" if filename.endswith(".jsonl") else ".json"
 
-    # Save upload to a temp file
-    tmp = tempfile.NamedTemporaryFile(
-        mode="wb", suffix=suffix, delete=False, prefix="challenge_upload_"
-    )
+    # Save candidates to temp file
+    tmp = tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False, prefix="challenge_")
     try:
         content = await file.read()
         tmp.write(content)
-        tmp.flush()
         tmp_path = tmp.name
     finally:
         tmp.close()
 
     file_size_mb = len(content) / (1024 * 1024)
-    logger.info(f"Received upload: {filename} ({file_size_mb:.1f} MB) → {tmp_path}")
+    logger.info(f"Upload: {filename} ({file_size_mb:.1f} MB) → {tmp_path}")
 
-    # Quick validation
+    # Validate candidates file
     try:
         if suffix == ".json":
             data = json.loads(content.decode("utf-8"))
@@ -237,11 +306,18 @@ async def upload_and_run(
             candidate_count = len(lines)
     except Exception as e:
         os.unlink(tmp_path)
-        raise HTTPException(400, f"Invalid file format: {e}")
+        raise HTTPException(400, f"Invalid candidates file: {e}")
 
     if candidate_count == 0:
         os.unlink(tmp_path)
-        raise HTTPException(400, "Uploaded file contains no candidates.")
+        raise HTTPException(400, "Candidates file is empty")
+
+    # Extract JD text
+    extracted_jd_text = jd_text or ""
+    if jd_file and jd_file.filename:
+        jd_content = await jd_file.read()
+        extracted_jd_text = _extract_text_from_file(jd_content, jd_file.filename)
+        logger.info(f"JD file: {jd_file.filename} ({len(extracted_jd_text)} chars)")
 
     is_sample = candidate_count <= 500
     actual_limit = limit if limit > 0 else candidate_count
@@ -249,7 +325,7 @@ async def upload_and_run(
     run_id = _create_run(tmp_path, is_sample, actual_limit, uploaded_filename=filename)
     background_tasks.add_task(
         _run_challenge_background, run_id, tmp_path, actual_limit, is_sample,
-        cleanup_file=tmp_path
+        cleanup_file=tmp_path, jd_text=extracted_jd_text or None,
     )
 
     return {
@@ -258,6 +334,7 @@ async def upload_and_run(
         "filename": filename,
         "candidate_count": candidate_count,
         "is_sample": is_sample,
+        "jd_provided": bool(extracted_jd_text),
         "message": f"Uploaded {candidate_count:,} candidates. Ranking started.",
     }
 
@@ -280,6 +357,8 @@ async def get_run_status(run_id: str):
         "top_10_preview": run["results"][:10] if run["results"] else [],
         "is_sample": run.get("is_sample", False),
         "uploaded_filename": run.get("uploaded_filename"),
+        "jd_title": run.get("jd_title"),
+        "jd_provided": run.get("jd_provided", False),
     }
 
 
@@ -292,10 +371,8 @@ async def download_challenge_csv(run_id: str):
         raise HTTPException(400, f"Run not complete (status: {run['status']})")
     if not run["csv_content"]:
         raise HTTPException(500, "No CSV content generated")
-
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
     filename = f"cortexhire_submission_{timestamp}.csv"
-
     return StreamingResponse(
         iter([run["csv_content"]]),
         media_type="text/csv",
@@ -319,40 +396,27 @@ async def get_run_results(run_id: str):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _create_run(
-    file_path: str,
-    is_sample: bool,
-    limit: int,
-    uploaded_filename: Optional[str] = None,
-) -> str:
+def _create_run(file_path, is_sample, limit, uploaded_filename=None):
     run_id = str(uuid.uuid4())
     _runs[run_id] = {
-        "run_id": run_id,
-        "status": "queued",
-        "file_path": file_path,
-        "is_sample": is_sample,
+        "run_id": run_id, "status": "queued",
+        "file_path": file_path, "is_sample": is_sample,
         "uploaded_filename": uploaded_filename,
         "total_candidates": limit if limit > 0 else 100000,
-        "processed": 0,
-        "honeypots_detected": 0,
+        "processed": 0, "honeypots_detected": 0,
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "completed_at": None,
-        "elapsed_seconds": None,
-        "error": None,
-        "results": [],
-        "csv_content": None,
+        "completed_at": None, "elapsed_seconds": None,
+        "error": None, "results": [], "csv_content": None,
+        "jd_title": None, "jd_provided": False,
     }
     return run_id
 
 
 def _run_challenge_background(
-    run_id: str,
-    file_path: str,
-    sample_limit: int,
-    is_sample: bool,
+    run_id: str, file_path: str, sample_limit: int, is_sample: bool,
     cleanup_file: Optional[str] = None,
+    jd_text: Optional[str] = None,
 ):
-    """Score candidates in background thread and store results."""
     run = _runs[run_id]
     run["status"] = "running"
     t_start = time.time()
@@ -363,11 +427,20 @@ def _run_challenge_background(
         if backend_dir not in sys.path:
             sys.path.insert(0, backend_dir)
 
-        from run_challenge import stream_candidates, score_candidate
+        from run_challenge import stream_candidates, score_candidate, build_jd_profile
+
+        # Build JD profile from uploaded JD text
+        jd_profile = None
+        if jd_text and len(jd_text.strip()) >= 30:
+            jd_profile = build_jd_profile(jd_text)
+            run["jd_title"] = jd_profile.title[:80]
+            run["jd_provided"] = True
+            logger.info(f"Run {run_id}: using custom JD — {jd_profile.parsed_summary}")
+        else:
+            logger.info(f"Run {run_id}: using default Redrob JD profile")
 
         # Handle JSON vs JSONL
-        path = Path(file_path)
-        if path.suffix == ".json":
+        if Path(file_path).suffix == ".json":
             with open(file_path, "r", encoding="utf-8") as f:
                 all_records = json.load(f)
             candidates_iter = iter(all_records if isinstance(all_records, list) else [all_records])
@@ -384,7 +457,7 @@ def _run_challenge_background(
         honeypots = 0
 
         for candidate in candidates_iter:
-            result = score_candidate(candidate)
+            result = score_candidate(candidate, jd_profile)
             if result is None:
                 honeypots += 1
                 processed += 1
@@ -401,12 +474,10 @@ def _run_challenge_background(
                 run["processed"] = processed
                 run["honeypots_detected"] = honeypots
 
-        # Final sort
         top_buffer.sort(key=lambda x: x["total_score"], reverse=True)
         top_n = min(100, len(top_buffer))
         top_results = top_buffer[:top_n]
 
-        # Generate CSV
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["candidate_id", "rank", "score", "reasoning"])
@@ -416,7 +487,6 @@ def _run_challenge_background(
         for rank, item in enumerate(top_results, start=1):
             score = min(prev_score, item["normalized_score"])
             prev_score = score
-
             writer.writerow([item["candidate_id"], rank, f"{score:.4f}", item["reasoning"]])
             results_list.append({
                 "rank": rank,
@@ -443,17 +513,16 @@ def _run_challenge_background(
             "results": results_list,
             "csv_content": output.getvalue(),
         })
-        logger.info(f"Challenge run {run_id}: {processed:,} processed in {elapsed:.1f}s")
+        logger.info(f"Run {run_id} complete: {processed:,} in {elapsed:.1f}s")
 
     except Exception as e:
-        logger.error(f"Challenge run {run_id} failed: {e}", exc_info=True)
+        logger.error(f"Run {run_id} failed: {e}", exc_info=True)
         run.update({
             "status": "failed",
             "error": str(e)[:500],
             "elapsed_seconds": round(time.time() - t_start, 1),
         })
     finally:
-        # Clean up temp upload file
         if cleanup_file:
             try:
                 os.unlink(cleanup_file)
