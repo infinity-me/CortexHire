@@ -276,6 +276,27 @@ export const challengeApi = {
     return res.data;
   },
 
+  uploadAndRun: async (
+    file: File,
+    limit = 0,
+    onProgress?: (percent: number) => void
+  ): Promise<{
+    run_id: string; status: string; filename: string;
+    candidate_count: number; is_sample: boolean; message: string;
+  }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('limit', String(limit));
+    const res = await api.post('/api/challenge/upload-and-run', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000, // 10 min
+      onUploadProgress: (e) => {
+        if (e.total) onProgress?.(Math.round((e.loaded / e.total) * 100));
+      },
+    });
+    return res.data;
+  },
+
   getStatus: async (runId: string): Promise<{
     run_id: string; status: string; total_candidates: number; processed: number;
     honeypots_detected: number; started_at: string; completed_at: string | null;
