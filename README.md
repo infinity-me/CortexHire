@@ -6,8 +6,10 @@
 **Don't hire resumes. Hire potential.**
 
 [![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-cortexhire.vercel.app-7c3aed?style=for-the-badge)](https://cortexhire.vercel.app)
-[![Backend API](https://img.shields.io/badge/⚡_Backend_API-Render-10b981?style=for-the-badge)](https://cortexhire.onrender.com/docs)
-[![Built for](https://img.shields.io/badge/Built_for-India_Runs_Data_%26_AI_Challenge-f59e0b?style=for-the-badge)](https://indiarunsdataandai.com)
+[![API Docs](https://img.shields.io/badge/⚡_API_Docs-Render-10b981?style=for-the-badge)](https://cortexhire.onrender.com/docs)
+[![Hackathon](https://img.shields.io/badge/🏆_Built_for-India_Runs_Data_%26_AI_Challenge-f59e0b?style=for-the-badge)](https://indiarunsdataandai.com)
+
+> Built for the **India Runs Data & AI Challenge** — ranking 500K+ real candidates from the Redrob platform using zero LLM calls, zero keyword stuffing, and genuine multi-dimensional intelligence.
 
 </div>
 
@@ -15,226 +17,100 @@
 
 ## 🎯 The Problem
 
-Traditional hiring is broken in three fundamental ways:
-
-1. **Keyword matching is not intelligence.** ATS systems reject great candidates who don't use the "right" words.
-2. **Human bias is systematic.** IIT pedigree, FAANG logos, and resume formatting influence decisions more than capability.
-3. **Resumes are backward-looking.** They show where someone has been — not where they're going.
-
-CortexHire is an AI-native recruitment platform that thinks the way the best human recruiters think — with full context, zero bias, and deep pattern recognition — at the scale and speed that humans simply cannot.
+Traditional ATS systems reject great engineers because they didn't write "Kubernetes" in the right font. CortexHire replaces that with a system that thinks like an elite recruiter — with full context, zero bias, and 100,000 candidates per minute.
 
 ---
 
-## 💡 The Solution
+## 🏗️ How It Works
 
-CortexHire introduces **5 novel AI innovations** that collectively solve the hiring problem from multiple dimensions:
+### Two Modes
 
-### Innovation 1 — Role Cognition Engine 🧬
-Instead of keyword-matching against a job description, CortexHire extracts a **"Role Genome"** — a structured multidimensional model of what a role *actually* needs, beyond its surface-level keywords.
+| Mode | Use Case | Speed |
+|---|---|---|
+| **Challenge Ranker** | Upload any candidates file + optional JD → instant ranked CSV | No LLM, seconds |
+| **Full Pipeline** | Jobs + Candidates DB → 2-phase AI ranking with 5 agents | LLM, minutes |
 
-The Role Genome scores 8 dimensions (0–1):
+### Scoring Breakdown (Challenge Ranker)
 
-| Dimension | What It Measures |
-|---|---|
-| `technical_depth` | Complexity of technical work required |
-| `ambiguity_tolerance` | Comfort with unclear requirements |
-| `ownership` | Independence and outcome-orientation |
-| `communication` | Cross-functional & stakeholder needs |
-| `startup_readiness` | Speed vs. process bias |
-| `leadership_potential` | People or technical influence expected |
-| `creativity` | Novel problem-solving vs. defined execution |
-| `execution_speed` | Pace and delivery expectations |
+Every candidate is scored across 4 dimensions — **no keyword stuffing, no resume gaming:**
 
-Plus extracted narrative intelligence: `hidden_needs`, `functional_needs`, `team_dynamics`, `risk_profile`, `cognitive_style`, `role_summary`.
+| Dimension | Weight | What It Measures |
+|---|---|---|
+| **Skills Depth** | 40 pts | Core skill match × proficiency level × duration × endorsements |
+| **Career Quality** | 30 pts | Experience range, product company ratio, seniority trajectory |
+| **Behavioral Signals** | 20 pts | Open-to-work, recency, notice period, recruiter response rate |
+| **Platform Engagement** | 10 pts | GitHub activity, profile completeness, recruiter saves |
 
----
-
-### Innovation 2 — 5-Agent Recruiter Simulation 🤖
-Every candidate is evaluated in **parallel by 5 specialized AI recruiter agents**, each with a distinct expertise and independent rubric:
-
-| Agent | Expertise |
-|---|---|
-| 🔧 **Technical Recruiter** | System complexity, architecture depth, scale of problems solved |
-| 📋 **Hiring Manager** | Ownership signals, delivery track record, execution under pressure |
-| 🧠 **Organizational Psychologist** | Behavioral patterns, resilience, cultural alignment |
-| ⚖️ **Diversity & Bias Corrector** | Detects and corrects pedigree, gap, and geographic bias |
-| 🔮 **Future Potential Predictor** | Career trajectory, learning velocity, 2-year projection |
-
-Each agent returns a `score (0–100)`, `confidence (0–1)`, `key_signals`, `risks`, and `reasoning`. Their assessments are aggregated by a **Consensus Ranking Engine** into a final fit score.
+**Anti-gaming filters built in:**
+- 🛡️ Honeypot detection — impossible profiles auto-excluded
+- 🔻 Consulting-only career penalty (−15 pts)
+- 🔻 Wrong-domain title penalty (−18 pts)
+- 🔻 Title-chaser pattern (avg tenure < 18mo) penalty (−5 pts)
 
 ---
 
-### Innovation 3 — Human Capability Embeddings 📐
-Candidates and roles are both embedded into **8-dimensional semantic vectors**, one per capability dimension. Cosine similarity is computed per-dimension, weighted by role genome importance — enabling semantic matching that goes beyond keyword overlap.
+## ✨ Features
 
-This powers the **Phase 1 Pre-Filter**: scoring 10,000+ candidates in seconds (no LLM), shortlisting the top N for deep analysis.
+### 🏆 Challenge Ranker
+- Upload **any** candidates `.jsonl` / `.json` file
+- Upload **any** JD (`.docx` / `.txt` / `.md` / `.pdf`) — or paste text
+- JD auto-parsed offline: extracts skills, experience range, seniority, locations
+- Scoring adapts dynamically to the uploaded JD — no hardcoding
+- Streams large files in 4 MB chunks — handles 700 MB+ without RAM blow-up
+- Outputs ranked CSV in the exact competition submission format
+- Full run history saved to disk — re-downloadable after server restart
 
----
+### 📊 Full Ranking Pipeline (Jobs Module)
+- Create jobs with AI-extracted **Role Genome** (8-dimension capability vector)
+- Import candidates from the 500K dataset via UI or CLI
+- 2-phase ranking: embedding pre-filter → 5-agent deep analysis
+- Results with fit scores, bias reports, trajectory, hiring explanations
+- Recruiter Copilot: ask "Why is candidate #3 ranked above #5?"
 
-### Innovation 4 — Temporal Intelligence Engine ⏳
-Career data is analyzed as a **time series** to detect:
-- Scope expansion velocity (are they growing faster than peers?)
-- Company stage transitions (startup → scale-up → enterprise)
-- Role change patterns (promotion vs. lateral vs. regressive)
-- Gap analysis (context-aware, not penalized)
-- Momentum classification: `accelerating / steady / plateauing / declining`
+### 🎤 Live AI Interview Panel
+- Real-time webcam interview with answer transcription (Web Speech API)
+- Periodic body-language analysis via Gemini Vision (every 10s)
+- Per-answer scoring: quality, communication, posture, engagement, confidence
+- Full interview report with scorecard
 
----
-
-### Innovation 5 — Ethical AI Layer ⚖️
-A dedicated Bias Corrector agent detects and corrects for:
-- **College prestige bias** — IIT/FAANG halo effect
-- **Career gap penalization** — Caregiving, health, personal reasons
-- **Geographic bias** — City/country-based quality assumptions
-- **Company name halo** — Previous employer prestige vs. actual work
-- **Resume formatting bias** — Presentation vs. content
-
-Bias adjustment: `-10 to +15` applied to raw capability score.
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Next.js Frontend                      │
-│  Jobs · Candidates · Rankings · Live Interview · Copilot│
-└────────────────────┬────────────────────────────────────┘
-                     │ REST API
-┌────────────────────▼────────────────────────────────────┐
-│                  FastAPI Backend                          │
-│                                                          │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │Role Cognition│  │ 5-Agent Sim  │  │  Embeddings    │  │
-│  │   Engine    │  │   Pipeline   │  │  (8-dim vec)   │  │
-│  └─────────────┘  └──────────────┘  └────────────────┘  │
-│                                                          │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │  Temporal   │  │Bias Corrector│  │Consensus Ranker│  │
-│  │Intelligence │  │   Agent      │  │  + Explainer   │  │
-│  └─────────────┘  └──────────────┘  └────────────────┘  │
-│                                                          │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │           LLM Router (Groq → OpenAI → Mock)       │  │
-│  └───────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌────────────┐  ┌──────────────────────────────────┐   │
-│  │ SQLite DB  │  │     Live Interview Engine         │   │
-│  │(SQLModel)  │  │ WebRTC + Gemini Vision + STT     │   │
-│  └────────────┘  └──────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────┘
-```
-
-### 2-Phase Ranking Pipeline (scales to 500K+ candidates)
-
-```
-All Candidates (any size)
-        │
-        ▼
-Phase 1 — Fast Pre-Filter (seconds, no LLM)
-  Embedding similarity scored per candidate
-  → Keep top N (configurable: 25–500)
-        │
-        ▼
-Phase 2 — Deep Analysis (minutes, LLM)
-  5 agents × top N candidates (parallel batches of 3)
-  → Consensus score + explanation
-        │
-        ▼
-Final Ranked Results
-```
+### 🤖 AI Innovations
+1. **Role Cognition Engine** — extracts 8-dim Role Genome from any JD
+2. **5-Agent Recruiter Simulation** — Technical, Hiring Manager, Psychologist, Bias Corrector, Future Predictor
+3. **Human Capability Embeddings** — 8-dim semantic vectors, cosine similarity per dimension
+4. **Temporal Intelligence** — career trajectory as time-series (accelerating / plateauing / declining)
+5. **Ethical AI Layer** — detects + corrects pedigree, gap, and geographic bias
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Backend
-| Technology | Purpose |
-|---|---|
-| **FastAPI** | Async REST API framework |
-| **SQLModel + SQLite** | ORM + embedded database (no Docker needed) |
-| **Groq (LLaMA 3.3 70B)** | Primary LLM — ultra-fast inference |
-| **OpenAI GPT-4o** | Fallback LLM + embedding generation |
-| **Google Gemini Flash** | Vision model — posture/body language in interviews |
-| **tenacity** | Retry logic with exponential backoff |
-| **pypdf + python-docx** | Resume text extraction (PDF, DOCX) |
-| **asyncio** | Parallel agent execution |
+| | Technology | Purpose |
+|---|---|---|
+| 🐍 | **FastAPI** | Async REST API |
+| 🗄️ | **SQLModel + SQLite** | ORM + embedded DB (no Docker) |
+| ⚡ | **Groq LLaMA 3.3 70B** | Primary LLM — ultra-fast inference |
+| 🤖 | **OpenAI GPT-4o** | Fallback LLM + semantic embeddings |
+| 👁️ | **Google Gemini Flash** | Vision — posture analysis in interviews |
+| 🔢 | **NumPy + scikit-learn** | TF-IDF embeddings, cosine similarity |
+| 📄 | **pdfplumber + python-docx** | JD/resume text extraction |
+| 🔁 | **tenacity** | Retry with exponential backoff |
 
 ### Frontend
-| Technology | Purpose |
-|---|---|
-| **Next.js 15 (App Router)** | Full-stack React framework |
-| **TypeScript** | Type safety across API surface |
-| **Framer Motion** | Animations and micro-interactions |
-| **Recharts / SVG** | Role Genome radar chart, score visualizations |
-| **Web Speech API** | Real-time interview answer transcription |
-| **MediaStream API** | Webcam capture for live interview panel |
-| **Axios** | HTTP client with timeout handling |
+| | Technology | Purpose |
+|---|---|---|
+| ⚛️ | **Next.js 16 (App Router)** | Full-stack React framework |
+| 🔷 | **TypeScript** | End-to-end type safety |
+| 🎞️ | **Framer Motion** | Animations & micro-interactions |
+| 📡 | **Axios** | API client with 2-min ranking timeout |
+| 🎙️ | **Web Speech API** | Browser-native STT for interviews |
+| 📷 | **MediaStream API** | Webcam capture (no plugins) |
 
 ### Infrastructure
-| Service | Role |
-|---|---|
-| **Vercel** | Frontend deployment (edge CDN) |
-| **Render** | Backend deployment (persistent disk for SQLite) |
-| **GitHub** | Source control + CI/CD trigger |
-
----
-
-## 📁 Project Structure
-
-```
-CortexHire/
-├── backend/
-│   ├── api/
-│   │   ├── routes_jobs.py           # CRUD + JD analysis endpoint
-│   │   ├── routes_candidates.py     # Resume upload, dataset import, bulk ops
-│   │   ├── routes_ranking.py        # 2-phase ranking pipeline + results
-│   │   ├── routes_interview.py      # Live AI interview engine
-│   │   └── routes_copilot.py        # Recruiter Q&A copilot
-│   ├── core/
-│   │   ├── llm_router.py            # Groq → OpenAI → Mock fallback chain
-│   │   ├── role_cognition.py        # Role Genome extraction (Innovation #1)
-│   │   ├── multi_agent.py           # 5-Agent Simulation (Innovation #4)
-│   │   ├── embeddings.py            # 8-dim capability vectors (Innovation #3)
-│   │   ├── temporal.py              # Career trajectory engine (Innovation #2)
-│   │   ├── bias_correction.py       # Bias detection + correction (Innovation #5)
-│   │   └── ranking.py               # Consensus scoring + explanation generation
-│   ├── db/
-│   │   ├── models.py                # SQLModel ORM: Job, Candidate, RankingRun, ...
-│   │   └── postgres.py              # Async DB session management
-│   ├── data/
-│   │   ├── dataset_importer.py      # Competition dataset ingestion (JSONL/JSON)
-│   │   ├── embedded_candidates.py   # 50-record seed data (committed to repo)
-│   │   ├── synthetic_jobs.py        # 5 rich JDs for demo/cold-start
-│   │   └── gen_embedded.py          # Regenerate embedded_candidates.py
-│   ├── config.py                    # Env config via pydantic-settings
-│   ├── main.py                      # App entrypoint + lifespan seeding
-│   └── requirements.txt
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx                 # Command Center dashboard
-│   │   ├── jobs/
-│   │   │   ├── page.tsx             # Jobs list + "+ New Job" modal
-│   │   │   └── [id]/page.tsx        # Job detail + Role Genome + Run Ranking
-│   │   ├── candidates/
-│   │   │   └── page.tsx             # Candidate list + resume upload + dataset import
-│   │   ├── ranking/
-│   │   │   └── [runId]/page.tsx     # Ranked results + agent scores + bias report
-│   │   ├── interview/
-│   │   │   ├── page.tsx             # Interview setup
-│   │   │   ├── [sessionId]/page.tsx # Live webcam + STT interview panel
-│   │   │   └── report/[sessionId]/  # Detailed interview scorecard
-│   │   └── copilot/page.tsx         # Recruiter AI copilot chat
-│   ├── components/
-│   │   ├── layout/Sidebar.tsx       # Navigation sidebar
-│   │   └── jobs/RoleGenomeChart.tsx # SVG radar chart for Role Genome
-│   └── lib/
-│       ├── api.ts                   # Typed API client (all endpoints)
-│       └── types.ts                 # TypeScript interfaces
-├── render.yaml                      # Render deployment config
-├── docker-compose.yml               # Local dev with Qdrant
-└── .env.example                     # Required environment variables
-```
+| | Service | Role |
+|---|---|---|
+| 🌐 | **Vercel** | Frontend (edge CDN) |
+| 🖥️ | **Render** | Backend (persistent disk for SQLite) |
 
 ---
 
@@ -243,7 +119,7 @@ CortexHire/
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- A free [Groq API key](https://console.groq.com) (for LLM)
+- [Groq API key](https://console.groq.com) — free, powers all LLM calls
 
 ### 1. Clone
 
@@ -258,155 +134,256 @@ cd CortexHire
 cd backend
 pip install -r requirements.txt
 cp ../.env.example .env
-# Edit .env and add your GROQ_API_KEY at minimum
+# Add your GROQ_API_KEY to .env
 uvicorn main:app --reload --port 8000
 ```
 
-The backend auto-seeds 5 synthetic jobs (with AI-extracted role genomes) and 50 real candidate records on first startup.
-
-**API Docs:** http://localhost:8000/docs
+On first startup the backend auto-seeds **5 synthetic jobs** (with AI role genomes) and **50 real candidate records**.
 
 ### 3. Frontend
 
 ```bash
 cd frontend
 npm install
+# Make sure .env.local points to local backend:
+# NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open → **http://localhost:3000**
 
 ---
 
 ## 🔑 Environment Variables
 
 ```env
+# .env in /backend
+
 # Required
-GROQ_API_KEY=gsk_...              # Free at console.groq.com — powers all LLM calls
+GROQ_API_KEY=gsk_...          # Free at console.groq.com
 
-# Optional (enhances specific features)
-OPENAI_API_KEY=sk-...             # Fallback LLM + real semantic embeddings
-GEMINI_API_KEY=AIza...            # Vision model for interview posture analysis
+# Optional — enhances specific features
+OPENAI_API_KEY=sk-...         # Real semantic embeddings (falls back to TF-IDF without this)
+GEMINI_API_KEY=AIza...        # Vision posture scoring in interviews (mocked without this)
 ```
-
-Without `OPENAI_API_KEY`, embeddings fall back to a deterministic TF-IDF mock (still works).  
-Without `GEMINI_API_KEY`, posture scoring uses smart mock values.
 
 ---
 
-## 🔄 Complete Hiring Workflow
+## 🏆 Shortlisting Candidates for a Job — Step by Step
 
-### For a new job requirement with a large dataset:
+### Path A — Challenge Ranker (fastest, no DB needed)
+
+> Best for: ranking uploaded files, hackathon submission, any custom JD
+
+```
+localhost:3000/challenge
+```
+
+1. **Upload JD** *(optional)* — drop any `.docx / .txt / .md / .pdf` file, or paste text
+   → System auto-extracts: skills, experience range, seniority, locations
+   → Scoring profile adapts to YOUR job — not hardcoded
+
+2. **Upload Candidates** *(required)* — drop `candidates.jsonl` or `sample_candidates.json`
+
+3. **Hit "Run Ranking"**
+   → Progress bar shows candidates processed in real time
+   → Honeypots detected and excluded automatically
+
+4. **View Results** — top 100 ranked with scores, reasoning, skill breakdown
+
+5. **Download CSV** — `submission.csv` in the exact competition format:
+   ```
+   candidate_id, rank, score, reasoning
+   ```
+
+---
+
+### Path B — Full AI Pipeline (deep analysis with LLM agents)
+
+> Best for: real hiring decisions, multi-agent scoring, bias-corrected results
 
 ```
 1. Jobs → "+ New Job"
-   Fill in: title, company, location, seniority, JD text
-   → AI auto-extracts Role Genome (8 dimensions + narrative)
+   Fill in title, company, JD text
+   → Role Genome extracted (8 capability dimensions)
 
 2. Candidates → "Bulk Dataset Import"
-   Upload: candidates.jsonl or sample_candidates.json
-   Set limit: 50 – 5,000 candidates
-   → Background import (no LLM needed, fast field mapping)
+   Upload candidates.jsonl, set limit (50–5000)
+   → Background async import, no LLM needed
 
-3. Jobs → [Your Job] → Set pre-filter slider
-   "Analyze top N candidates" (25–500)
-   → Phase 1 embedding pre-filter runs on ALL candidates (seconds)
-   → Phase 2 deep 5-agent analysis on top N only (minutes)
+3. Jobs → [Your Job] → "Run Ranking"
+   Set shortlist size (25–500)
+   → Phase 1: embedding pre-filter on ALL candidates (seconds)
+   → Phase 2: 5-agent deep analysis on top N (minutes)
 
-4. View Results → /ranking/[runId]
-   Full ranked list with: fit score, agent consensus,
-   bias-corrected scores, trajectory, hiring explanation
+4. Rankings → View results
+   Fit score · Agent consensus · Bias report · Career trajectory
 
 5. Recruiter Copilot → Ask anything
-   "Why is candidate #3 ranked above #5?"
-   "Who has the strongest system design background?"
+   "Why is candidate #3 above #5?"
+   "Who has the strongest RAG background?"
 ```
 
 ---
 
-## 🎥 Live Interview Panel
+## 📦 Working with Large Candidate Files Locally
 
-The AI interview panel is a complete webcam-based assessment tool:
+The competition dataset (`candidates.jsonl`) is ~500K records and is **gitignored** due to size. Here's how to use it:
 
-| Feature | Technology |
-|---|---|
-| Real-time answer transcription | Web Speech API (browser-native) |
-| Periodic body language analysis | Gemini Flash Vision (every 10s) |
-| Answer quality + communication scoring | Groq LLaMA 3.3 70B |
-| Webcam capture (no plugins) | MediaStream API |
-| Session persistence | SQLite (interview answers + scores) |
+### Option A — UI Upload (recommended for files up to ~200 MB)
 
-**Scoring rubric (out of 100):**
+1. Place your `candidates.jsonl` anywhere on your machine
+2. Go to **Challenge Ranker** → drop the file in the Candidates section
+3. The backend streams it in 4 MB chunks — never loads the full file into RAM
+4. Works for files up to **700 MB** (hard limit)
 
-| Metric | Weight |
-|---|---|
-| Answer Quality | 40% |
-| Posture & Body Language | 20% |
-| Communication Clarity | 15% |
-| Engagement | 15% |
-| Confidence | 10% |
+> ⚠️ For cloud (Render), the 2-min request timeout kicks in for files > ~50 MB. **Use local backend for large files.**
+
+### Option B — Local File Mode (fastest, no upload needed)
+
+Place the dataset in the expected path:
+
+```
+CortexHire/
+└── India_runs_data_and_ai_challenge/
+    └── candidates.jsonl          ← full 500K dataset
+    └── sample_candidates.json   ← 50-record sample (included in repo)
+```
+
+The backend detects this automatically. In Challenge Ranker you'll see the file listed as available — click it to run without uploading.
+
+### Option C — CLI (for headless / scripted runs)
+
+```bash
+# Run on full dataset, output submission.csv
+python backend/run_challenge.py
+
+# Custom file + output path
+python backend/run_challenge.py \
+  --candidates ../India_runs_data_and_ai_challenge/candidates.jsonl \
+  --out submission.csv
+
+# Fast test on first 1000 records
+python backend/run_challenge.py --sample 1000
+
+# With a custom JD file
+python backend/run_challenge.py \
+  --candidates candidates.jsonl \
+  --jd my_job_description.docx \
+  --out ranked.csv
+```
+
+### Option D — Import into DB (for Full Pipeline mode)
+
+```bash
+# Import 500 real candidates into SQLite (background, no LLM)
+python -m data.dataset_importer --file candidates.jsonl --limit 500
+
+# Or via UI: Candidates → "Bulk Dataset Import" → upload file → set limit
+```
 
 ---
 
-## 📊 API Reference
+## 📁 Project Structure
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/jobs/` | List all jobs |
-| `POST` | `/api/jobs/` | Create a new job |
-| `POST` | `/api/jobs/{id}/analyze` | Extract Role Genome from JD |
-| `GET` | `/api/candidates/` | List all candidates |
-| `POST` | `/api/candidates/bulk-upload` | Upload PDF/DOCX resumes (LLM-parsed) |
-| `POST` | `/api/candidates/import-dataset` | Import from JSONL/JSON dataset file |
-| `GET` | `/api/candidates/import-status/{id}` | Poll dataset import progress |
-| `POST` | `/api/ranking/run/{job_id}` | Start 2-phase ranking pipeline |
-| `GET` | `/api/ranking/run/{run_id}/status` | Poll ranking status |
-| `GET` | `/api/ranking/results/{run_id}` | Get full ranked results |
-| `GET` | `/api/ranking/job/{job_id}/latest` | Get most recent ranking for a job |
-| `POST` | `/api/interview/start` | Start AI interview session |
-| `POST` | `/api/interview/evaluate-answer` | Score a single answer |
-| `POST` | `/api/interview/analyze-frame` | Vision analysis of webcam frame |
-| `POST` | `/api/interview/report/{session_id}` | Generate full interview report |
-| `POST` | `/api/copilot/chat` | Ask the Recruiter Copilot |
-| `GET` | `/health` | Health check + LLM provider status |
-
-Full interactive docs: **[https://cortexhire.onrender.com/docs](https://cortexhire.onrender.com/docs)**
+```
+CortexHire/
+├── backend/
+│   ├── api/
+│   │   ├── routes_challenge.py      # Challenge Ranker API (upload + rank + history)
+│   │   ├── routes_jobs.py           # Job CRUD + Role Genome analysis
+│   │   ├── routes_candidates.py     # Resume upload, dataset import
+│   │   ├── routes_ranking.py        # 2-phase ranking pipeline
+│   │   ├── routes_interview.py      # Live AI interview engine
+│   │   └── routes_copilot.py        # Recruiter Q&A copilot
+│   ├── core/
+│   │   ├── llm_router.py            # Groq → OpenAI → Mock fallback chain
+│   │   ├── role_cognition.py        # Role Genome extraction
+│   │   ├── multi_agent.py           # 5-Agent Simulation
+│   │   ├── embeddings.py            # 8-dim capability vectors
+│   │   ├── temporal.py              # Career trajectory engine
+│   │   ├── bias_correction.py       # Bias detection + correction
+│   │   └── ranking.py               # Consensus scoring + explanations
+│   ├── db/
+│   │   ├── models.py                # SQLModel ORM models
+│   │   └── postgres.py              # Async session management
+│   ├── data/
+│   │   ├── dataset_importer.py      # JSONL/JSON dataset ingestion
+│   │   ├── embedded_candidates.py   # 50-record seed (committed, works on Render)
+│   │   └── synthetic_jobs.py        # 5 rich demo JDs for cold-start
+│   ├── run_challenge.py             # Standalone CLI ranker (zero-dependency scoring)
+│   ├── config.py                    # Env config via pydantic-settings
+│   ├── main.py                      # App entrypoint + lifespan seeding
+│   └── requirements.txt
+├── frontend/
+│   ├── app/
+│   │   ├── page.tsx                 # Command Center dashboard
+│   │   ├── challenge/page.tsx       # Challenge Ranker UI
+│   │   ├── jobs/[id]/page.tsx       # Job detail + Role Genome radar + Run Ranking
+│   │   ├── candidates/page.tsx      # Candidate list + upload + dataset import
+│   │   ├── ranking/[runId]/page.tsx # Ranked results + agent scores + bias report
+│   │   ├── interview/               # Live webcam interview + report
+│   │   └── challenge/page.tsx       # Challenge Ranker + history
+│   ├── lib/
+│   │   ├── api.ts                   # Typed API client
+│   │   └── types.ts                 # TypeScript interfaces
+│   └── .env.local                   # NEXT_PUBLIC_API_URL (localhost or Render)
+├── India_runs_data_and_ai_challenge/ # ← gitignored, place dataset here
+│   ├── candidates.jsonl             # Full 500K dataset
+│   └── sample_candidates.json       # 50-record sample
+├── render.yaml                      # Render deployment config
+└── .env.example                     # Environment variable template
+```
 
 ---
 
 ## 🌐 Deployment
 
-### Frontend — Vercel
+### Frontend → Vercel
 
 ```bash
 vercel --prod
-# Set env: NEXT_PUBLIC_API_URL=https://cortexhire.onrender.com
+# Set env var: NEXT_PUBLIC_API_URL=https://cortexhire.onrender.com
 ```
 
-### Backend — Render
+### Backend → Render
 
-Configured via `render.yaml`. Key settings:
-- **Persistent disk** at `/data` for SQLite (`cortexhire.db`)
-- Auto-seeds candidates + jobs on cold start
-- Build: `pip install -r requirements.txt`
+Configured via `render.yaml`:
+- Persistent disk at `/data` for SQLite
+- Auto-seeds jobs + candidates on cold start
 - Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+> ⚠️ **Large file uploads on Render** time out after ~2 minutes. For the full 500K dataset, run the backend locally and use the local file mode or CLI.
 
 ---
 
-## 🏆 Built for India Runs Data & AI Challenge
+## 📡 API Reference
 
-CortexHire was built as a submission for the **India Runs Data & AI Challenge**, using the competition's candidate dataset (500K records from the Redrob platform).
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/challenge/upload-and-run` | Upload candidates + optional JD → start ranking |
+| `GET` | `/api/challenge/status/{run_id}` | Poll ranking progress |
+| `GET` | `/api/challenge/results/{run_id}` | Full ranked results JSON |
+| `GET` | `/api/challenge/download/{run_id}` | Download submission CSV |
+| `GET` | `/api/challenge/history` | All past runs (persisted to disk) |
+| `POST` | `/api/challenge/parse-jd` | Extract JD profile from file or text |
+| `GET` | `/api/jobs/` | List all jobs |
+| `POST` | `/api/ranking/run/{job_id}` | Start 2-phase AI ranking |
+| `GET` | `/api/ranking/run/{run_id}/status` | Poll ranking status |
+| `GET` | `/api/ranking/results/{run_id}` | Full ranked results |
+| `POST` | `/api/interview/start` | Start AI interview session |
+| `POST` | `/api/copilot/chat` | Recruiter Copilot Q&A |
+| `GET` | `/health` | Health check + LLM provider |
 
-The dataset is gitignored due to size. The system includes:
-- A 50-record embedded seed (`data/embedded_candidates.py`) for cold-start demo
-- Full CLI import: `python -m data.dataset_importer --file candidates.jsonl --limit 500`
-- UI import: Candidates page → "Bulk Dataset Import"
+Full interactive docs: **http://localhost:8000/docs** or **[Render API Docs](https://cortexhire.onrender.com/docs)**
 
 ---
 
 <div align="center">
 
-Built with ❤️ — *AI that thinks like a recruiter, not a keyword matcher.*
+Built with ❤️ for the **India Runs Data & AI Challenge**
+
+*AI that thinks like a recruiter, not a keyword matcher.*
 
 **[🌐 Live Demo](https://cortexhire.vercel.app)** · **[📖 API Docs](https://cortexhire.onrender.com/docs)** · **[⭐ Star on GitHub](https://github.com/infinity-me/CortexHire)**
 

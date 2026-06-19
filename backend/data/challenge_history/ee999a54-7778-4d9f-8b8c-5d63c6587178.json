@@ -1,0 +1,83 @@
+{
+  "run_id": "ee999a54-7778-4d9f-8b8c-5d63c6587178",
+  "status": "complete",
+  "uploaded_filename": "server_file",
+  "total_candidates": 100001,
+  "processed": 100000,
+  "honeypots_detected": 1,
+  "elapsed_seconds": 38.3,
+  "started_at": "2026-06-19T16:21:20.065396+00:00",
+  "completed_at": "2026-06-19T16:21:58.374838+00:00",
+  "jd_title": "Job Description: Senior AI Engineer — Founding Team",
+  "jd_provided": true,
+  "is_sample": false,
+  "ranked_count": 100,
+  "top_5": [
+    {
+      "rank": 1,
+      "candidate_id": "CAND_0077337",
+      "score": 0.8128,
+      "title": "Staff Machine Learning Engineer",
+      "name": "Aarav Agarwal",
+      "skills_score": 31.4,
+      "career_score": 26.0,
+      "behavioral_score": 16.22,
+      "engagement_score": 7.66,
+      "total_score": 81.28,
+      "reasoning": "Staff Machine Learning Engineer with 7.0yrs experience; AI/ML skills: rag, bm25, pinecone, qdrant; 7.0yrs (ideal), 4 senior roles; open to work; active this month; strong academic background (tier 1)"
+    },
+    {
+      "rank": 2,
+      "candidate_id": "CAND_0088025",
+      "score": 0.7912,
+      "title": "Staff Machine Learning Engineer",
+      "name": "Amit Arora",
+      "skills_score": 32.21,
+      "career_score": 25.0,
+      "behavioral_score": 14.12,
+      "engagement_score": 7.79,
+      "total_score": 79.12,
+      "reasoning": "Staff Machine Learning Engineer with 8.6yrs experience; AI/ML skills: rag, bm25, transformers, pinecone; 8.6yrs (ideal), 3 senior roles; open to work; active <90d; strong academic background (tier 2)"
+    },
+    {
+      "rank": 3,
+      "candidate_id": "CAND_0018499",
+      "score": 0.7487,
+      "title": "Senior Machine Learning Engineer",
+      "name": "Aarav Trivedi",
+      "skills_score": 32.0,
+      "career_score": 17.5,
+      "behavioral_score": 15.64,
+      "engagement_score": 9.73,
+      "total_score": 74.87,
+      "reasoning": "Senior Machine Learning Engineer with 7.2yrs experience; AI/ML skills: rag, milvus, embeddings, weaviate; 7.2yrs (ideal), 3 senior roles; open to work; active <90d; strong academic background (tier 1); available soon (notice: 15d)"
+    },
+    {
+      "rank": 4,
+      "candidate_id": "CAND_0071974",
+      "score": 0.7475,
+      "title": "Senior AI Engineer",
+      "name": "Sai Verma",
+      "skills_score": 30.89,
+      "career_score": 20.0,
+      "behavioral_score": 14.94,
+      "engagement_score": 8.92,
+      "total_score": 74.75,
+      "reasoning": "Senior AI Engineer with 7.8yrs experience; AI/ML skills: bm25, embeddings, weaviate, pinecone; 7.8yrs (ideal), 3 senior roles; open to work; active <90d; strong academic background (tier 1)"
+    },
+    {
+      "rank": 5,
+      "candidate_id": "CAND_0002025",
+      "score": 0.7327,
+      "title": "Senior AI Engineer",
+      "name": "Ira Dalal",
+      "skills_score": 29.0,
+      "career_score": 17.5,
+      "behavioral_score": 17.44,
+      "engagement_score": 9.33,
+      "total_score": 73.27,
+      "reasoning": "Senior AI Engineer with 5.9yrs experience; AI/ML skills: opensearch, weaviate, transformers, pinecone; 5.9yrs (ideal), 2 senior roles; open to work; active this month; strong academic background (tier 1); available soon (notice: 30d)"
+    }
+  ],
+  "error": null
+}

@@ -297,8 +297,8 @@ export const challengeApi = {
     jd_provided: boolean; message: string;
   }> => {
     const params = new URLSearchParams({ use_sample: String(useSample), sample_limit: String(sampleLimit) });
-    if (jdText) params.set('jd_text', jdText);
-    const res = await api.post(`/api/challenge/run?${params}`, {}, { timeout: 30000 });
+    // jd_text goes in the JSON body to avoid URL length limits (JD can be thousands of chars)
+    const res = await api.post(`/api/challenge/run?${params}`, { jd_text: jdText || null }, { timeout: 30000 });
     return res.data;
   },
 

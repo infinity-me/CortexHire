@@ -31,10 +31,11 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/challenge", tags=["Challenge"])
@@ -172,7 +173,7 @@ def _find_sample() -> Optional[str]:
 async def get_challenge_info():
     dataset_path = _find_dataset()
     sample_path = _find_sample()
-    result = {
+    result: dict[str, Any] = {
         "full_dataset": None,
         "sample_dataset": None,
         "upload_supported": True,
@@ -260,12 +261,16 @@ async def parse_jd(
     }
 
 
+class RunRequest(BaseModel):
+    jd_text: Optional[str] = None
+
+
 @router.post("/run")
 async def start_challenge_run(
     background_tasks: BackgroundTasks,
+    body: RunRequest = RunRequest(),
     use_sample: bool = False,
     sample_limit: int = 0,
-    jd_text: Optional[str] = None,
 ):
     if use_sample:
         file_path = _find_sample()
@@ -279,8 +284,8 @@ async def start_challenge_run(
         is_sample, limit = False, sample_limit
 
     run_id = _create_run(file_path, is_sample, limit)
-    background_tasks.add_task(_run_challenge_background, run_id, file_path, limit, is_sample, jd_text=jd_text)
-    return {"run_id": run_id, "status": "queued", "file": file_path, "is_sample": is_sample, "jd_provided": bool(jd_text), "message": "Ranking started."}
+    background_tasks.add_task(_run_challenge_background, run_id, file_path, limit, is_sample, jd_text=body.jd_text)
+    return {"run_id": run_id, "status": "queued", "file": file_path, "is_sample": is_sample, "jd_provided": bool(body.jd_text), "message": "Ranking started."}
 
 
 @router.post("/upload-and-run")
